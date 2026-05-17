@@ -5,30 +5,39 @@
 # Test summary and expected results:
 # 1. Initial main build
 #    - Local nbgv:    1.0.0-preview.1
-#    - Effective dev: 1.0.0-preview.1.YYDDD.1
+#    - Effective dev: 1.0.0-preview.1.YYDDD.1+SHORTSHA
 # 2. Feature branch squash-merged to main
 #    - Local nbgv:    1.0.0-preview.2
-#    - Effective dev: 1.0.0-preview.2.YYDDD.2
+#    - Effective dev: 1.0.0-preview.2.YYDDD.2+SHORTSHA
 # 3. Fix branch squash-merged to main
 #    - Local nbgv:    1.0.0-preview.3
-#    - Effective dev: 1.0.0-preview.3.YYDDD.3
+#    - Effective dev: 1.0.0-preview.3.YYDDD.3+SHORTSHA
 # 4. RC promotion tag on main
 #    - Tag:           v1.0.0-rc.1
 #    - Local nbgv:    1.0.0-preview.3
 #    - Effective env: 1.0.0-rc.1
-# 5. Production promotion tag on main
+# 5. Bug fix after RC on main
+#    - Local nbgv:    1.0.0-preview.4
+#    - Effective dev: 1.0.0-preview.4.YYDDD.4+SHORTSHA
+# 6. RC repromotion tag on main
+#    - Tag:           v1.0.0-rc.2
+#    - Local nbgv:    1.0.0-preview.4
+#    - Effective env: 1.0.0-rc.2
+# 7. Production promotion tag on main
 #    - Tag:           v1.0.0
-#    - Local nbgv:    1.0.0-preview.3
+#    - Local nbgv:    1.0.0-preview.4
 #    - Effective env: 1.0.0
-# 6. Next release train starts
+# 8. Next release train starts
 #    - version.json:  1.1.0-preview.{height}
 #    - Local nbgv:    1.1.0-preview.1
-#    - Effective dev: 1.1.0-preview.1.YYDDD.4
+#    - Effective dev: 1.1.0-preview.1.YYDDD.5+SHORTSHA
 #
 # Version format reference for dev builds:
-# 1.0.0-preview.1.26104.118
-# │ │ │         │     │    └─ build revision / commit count on main
-# │ │ │         │     └────── date stamp (yyDDD)
+# 1.0.0-preview.1.26104.118+2252050ccc
+# │ │ │         │     │  │
+# │ │ │         │     │  └─ short git SHA as build metadata
+# │ │ │         │     └──── build revision / commit count on main
+# │ │ │         └────────── date stamp (yyDDD)
 # │ │ │         └──────────── preview counter from merged PR height
 # │ │ └────────────────────── prerelease label
 # │ └──────────────────────── patch
@@ -102,10 +111,14 @@ get_date_stamp() {
     date +%y%j
 }
 
+get_commit_short() {
+    run_in_repo git rev-parse --short HEAD
+}
+
 get_effective_dev_version() {
     local base_semver="$1"
 
-    echo "${base_semver}.$(get_date_stamp).$(get_revision)"
+    echo "${base_semver}.$(get_date_stamp).$(get_revision)+$(get_commit_short)"
 }
 
 get_effective_version() {
@@ -129,12 +142,12 @@ get_effective_version() {
 
 print_versions() {
     local actual_nbgv="$1"
-    local expected_nbgv="$2"
+    local expected_version="$2"
     local effective_actual="$3"
     local effective_expected="$4"
 
     echo -e "  ${MAGENTA}${BOLD}Calculated by nbgv:${NC} ${MAGENTA}${actual_nbgv}${NC}"
-    echo -e "  ${YELLOW}${BOLD}Expected nbgv:${NC}     ${YELLOW}${expected_nbgv}${NC}"
+    echo -e "  ${YELLOW}${BOLD}Expected version:${NC}  ${YELLOW}${expected_version}${NC}"
     echo -e "  ${CYAN}${BOLD}Effective version:${NC}  ${CYAN}${effective_actual}${NC}"
     echo -e "  ${GREEN}${BOLD}Expected effective:${NC} ${GREEN}${effective_expected}${NC}"
 }
@@ -271,7 +284,7 @@ check_dev() {
 check_staging() {
     local description="$1"
     local expected_version="$2"
-    local expected_nbgv="$3"
+    local expected_effective="$3"
     local actual_semver
     local effective_version
 
@@ -280,17 +293,18 @@ check_staging() {
     actual_semver=$(get_semver)
     effective_version=$(get_effective_version)
 
-    print_versions "$actual_semver" "$expected_nbgv" "$effective_version" "$expected_version"
+    print_versions "$actual_semver" "$expected_version" "$effective_version" "$expected_effective"
 
-    assert_equals "staging tag version" "$effective_version" "$expected_version"
-    assert_not_equals "nbgv stays on preview train" "$actual_semver" "$expected_version"
+    assert_equals "expected version matches nbgv" "$actual_semver" "$expected_version"
+    assert_equals "staging tag version" "$effective_version" "$expected_effective"
+    assert_not_equals "nbgv stays on preview train" "$actual_semver" "$expected_effective"
     assert_contains "nbgv still reflects preview train" "$actual_semver" "-preview."
 }
 
 check_prod() {
     local description="$1"
     local expected_version="$2"
-    local expected_nbgv="$3"
+    local expected_effective="$3"
     local actual_semver
     local effective_version
 
@@ -299,10 +313,11 @@ check_prod() {
     actual_semver=$(get_semver)
     effective_version=$(get_effective_version)
 
-    print_versions "$actual_semver" "$expected_nbgv" "$effective_version" "$expected_version"
+    print_versions "$actual_semver" "$expected_version" "$effective_version" "$expected_effective"
 
-    assert_equals "production tag version" "$effective_version" "$expected_version"
-    assert_not_equals "nbgv stays on preview train" "$actual_semver" "$expected_version"
+    assert_equals "expected version matches nbgv" "$actual_semver" "$expected_version"
+    assert_equals "production tag version" "$effective_version" "$expected_effective"
+    assert_not_equals "nbgv stays on preview train" "$actual_semver" "$expected_effective"
     assert_contains "nbgv still reflects preview train" "$actual_semver" "-preview."
 }
 
@@ -312,13 +327,14 @@ test_all() {
     local old_declared
     local next_declared
     local current_preview
+    local post_rc_preview
 
     stable=$(get_stable_version)
 
     header "VERSIONING TESTS"
     info "DEV uses preview.{height}; each squash-merge to main increments the preview number"
-    info "DEV effective version appends .YYDDD.REVISION metadata for readability and traceability"
-    info "STAGING and PROD are promoted by git tags"
+    info "DEV effective version appends .YYDDD.REVISION and uses +SHORTSHA build metadata for traceability"
+    info "STAGING and PROD are promoted by git tags; RC bug fixes stay on the same release train and repromote as rc.N"
 
     check_dev "1. Initial main build" "${stable}-preview.1"
 
@@ -337,13 +353,24 @@ test_all() {
 
     header "4. RC promotion"
     tag_head "v${stable}-rc.1" "Release candidate"
-    check_staging "After RC tag" "${stable}-rc.1" "$current_preview"
+    check_staging "After RC tag" "$current_preview" "${stable}-rc.1"
 
-    header "5. Production promotion"
+    header "5. Bug fix after RC"
+    run_in_repo git checkout -b fix/rc-bug >/dev/null
+    commit_change "fix(auth): resolve release candidate regression"
+    merge_branch "fix/rc-bug"
+    post_rc_preview="${stable}-preview.4"
+    check_dev "After RC bug fix merge" "$post_rc_preview"
+
+    header "6. RC repromotion"
+    tag_head "v${stable}-rc.2" "Release candidate 2"
+    check_staging "After RC2 tag" "$post_rc_preview" "${stable}-rc.2"
+
+    header "7. Production promotion"
     tag_head "v${stable}" "Production release"
-    check_prod "After production tag" "$stable" "$current_preview"
+    check_prod "After production tag" "$post_rc_preview" "$stable"
 
-    header "6. Next release train"
+    header "8. Next release train"
     old_declared=$(get_declared_version)
     next_stable=$(next_minor_stable "$stable")
     next_declared="${next_stable}-preview.{height}"
@@ -358,12 +385,14 @@ summary() {
     echo -e "  ${GREEN}Passed: $PASSED${NC}"
     echo -e "  ${RED}Failed: $FAILED${NC}\n"
     echo -e "  ${BOLD}Scenario summary:${NC}"
-    echo -e "  ${BLUE}1.${NC} main init            -> 1.0.0-preview.1 -> dev 1.0.0-preview.1.YYDDD.1"
-    echo -e "  ${BLUE}2.${NC} feature squash merge -> 1.0.0-preview.2 -> dev 1.0.0-preview.2.YYDDD.2"
-    echo -e "  ${BLUE}3.${NC} fix squash merge     -> 1.0.0-preview.3 -> dev 1.0.0-preview.3.YYDDD.3"
+    echo -e "  ${BLUE}1.${NC} main init            -> 1.0.0-preview.1 -> dev 1.0.0-preview.1.YYDDD.1+SHORTSHA"
+    echo -e "  ${BLUE}2.${NC} feature squash merge -> 1.0.0-preview.2 -> dev 1.0.0-preview.2.YYDDD.2+SHORTSHA"
+    echo -e "  ${BLUE}3.${NC} fix squash merge     -> 1.0.0-preview.3 -> dev 1.0.0-preview.3.YYDDD.3+SHORTSHA"
     echo -e "  ${BLUE}4.${NC} rc tag               -> nbgv still 1.0.0-preview.3 -> staging 1.0.0-rc.1"
-    echo -e "  ${BLUE}5.${NC} stable tag           -> nbgv still 1.0.0-preview.3 -> prod 1.0.0"
-    echo -e "  ${BLUE}6.${NC} next train           -> 1.1.0-preview.1 -> dev 1.1.0-preview.1.YYDDD.4\n"
+    echo -e "  ${BLUE}5.${NC} post-rc bug fix      -> 1.0.0-preview.4 -> dev 1.0.0-preview.4.YYDDD.4+SHORTSHA"
+    echo -e "  ${BLUE}6.${NC} rc retag             -> nbgv still 1.0.0-preview.4 -> staging 1.0.0-rc.2"
+    echo -e "  ${BLUE}7.${NC} stable tag           -> nbgv still 1.0.0-preview.4 -> prod 1.0.0"
+    echo -e "  ${BLUE}8.${NC} next train           -> 1.1.0-preview.1 -> dev 1.1.0-preview.1.YYDDD.5+SHORTSHA\n"
 
     if [ "$FAILED" -eq 0 ]; then
         echo -e "${GREEN}${BOLD}✅ ALL CHECKS PASSED!${NC}"

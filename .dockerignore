@@ -1,0 +1,13 @@
+﻿bin/
+obj/
+.git/
+.github/
+.idea/
+publish/
+publish-test/
+tests/**/bin/
+tests/**/obj/
+*.user
+*.suo
+*.rsuser
+

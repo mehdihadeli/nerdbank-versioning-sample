@@ -1,20 +1,22 @@
 # AGENTS.md
 
 ## What this repo is
-- This repository is a **versioning sample**, not a feature-rich application. The only app code is `Program.cs`, which is currently the default Hello World console entry point.
-- The important behavior lives in `version.json`, `dotnet-tools.json`, `nerdbank-versioning.sh`, and `.github/workflows/ci-cd.yml`.
+- This repository is a **versioning sample**, not a feature-rich application. The app is now a minimal ASP.NET Core web app with a root page and a `/version` endpoint.
+- The important behavior lives in `version.json`, `dotnet-tools.json`, `nerdbank-versioning.sh`, `Dockerfile`, and `.github/workflows/ci-cd.yml`.
 
 ## Big picture
 - **Local versioning path:** `version.json` + the local `nbgv` tool from `dotnet-tools.json` define a Nerdbank.GitVersioning-based scheme (`1.0.0-preview.{height}` with `v{version}` release tags).
-- **CI versioning path:** `.github/workflows/ci-cd.yml` now uses the same local `nbgv` tool and appends `yyDDD.revision` to dev builds, while only overriding the effective version for RC/stable tags.
+- **CI versioning path:** `.github/workflows/ci-cd.yml` now uses the same local `nbgv` tool and appends `yyDDD.revision+shortsha` to dev builds, while only overriding the effective version for RC/stable tags.
 - For the GitHub Flow model used here (`main` + short-lived feature/fix branches), the most practical strategy is **planned next version + preview height**: merges to `main` publish `X.Y.Z-preview.{height}` to dev, an RC tag promotes the same base version to staging, and a clean `vX.Y.Z` tag promotes to production.
 
 ## Files that matter most
 - `version.json`: canonical local version rules. Read this first for tag patterns, preview/release behavior, and cloud-build variables.
 - `.github/workflows/ci-cd.yml`: release pipeline example; also shows how deployment environment is inferred from refs/tags.
+- `Dockerfile`: accepts CI-calculated version build args, passes them to `dotnet publish`, and exposes the calculated runtime version metadata through container environment variables.
 - `dotnet-tools.json` + `nerdbank-versioning.sh`: local tool restore plus a disposable Git history simulator for preview/RC/prod scenarios.
-- `Program.cs` + `versioning-samples.csproj`: runtime version display uses assembly metadata stamped by the `Nerdbank.GitVersioning` package.
-- `versioning-samples.csproj`: minimal SDK-style project targeting `net10.0`; the only package reference is `Nerdbank.GitVersioning` for assembly/version stamping.
+- `Program.cs` + `VersionInfoProvider.cs`: minimal web host plus the `/version` endpoint; runtime version display prefers a sibling `version.json` file and falls back to assembly metadata stamped by `Nerdbank.GitVersioning`.
+- `tests/versioning-samples.Tests`: smoke test coverage for the `/version` endpoint.
+- `versioning-samples.csproj`: minimal ASP.NET Core project targeting `net10.0`; the only package reference is `Nerdbank.GitVersioning` for assembly/version stamping.
 
 ## Verified local workflow
 ```bash
@@ -29,11 +31,11 @@ dotnet tool restore
 - Version tags in `version.json` are expected in the form `vX.Y.Z`; `main` is the public-release branch.
 - Preview builds are modeled as `*-preview.{height}` locally; production releases are clean `vX.Y.Z` tags.
 - To keep preview numbers aligned with merged PR count (`preview.1`, `preview.2`, `preview.3`), the verifier script models **squash-style merges** into `main` rather than no-ff merges.
-- Dev CI versions are emitted in EF-style form `X.Y.Z-preview.N.YYDDD.REVISION`, e.g. `1.0.0-preview.3.26137.3`.
+- Dev CI versions are emitted in hybrid SemVer form `X.Y.Z-preview.N.YYDDD.REVISION+SHORTSHA`, e.g. `1.0.0-preview.3.26137.3+2252050ccc`.
 - CI writes both `nbgvSemVer` and the environment-specific effective `semVer` to `publish/version.json`.
-- Local builds rely on the `Nerdbank.GitVersioning` MSBuild package to stamp the assembly; the running app reads `AssemblyInformationalVersion` at runtime.
-- CI/CD overrides `Version` / `InformationalVersion` during both `dotnet build` and `dotnet publish` so the published app reports the effective CI-selected version.
-- The running app prefers a sibling `version.json` file (written during CI publish) and falls back to assembly-stamped version metadata when that file is absent.
+- Local builds rely on the `Nerdbank.GitVersioning` MSBuild package to stamp the assembly; the running app reads `AssemblyInformationalVersion` at runtime when no CI-generated `version.json` file is present.
+- CI/CD overrides `Version` / `InformationalVersion` during both direct `dotnet` builds and Docker-based `dotnet publish` so the published app reports the effective CI-selected version.
+- The running app prefers a sibling `version.json` file (written during direct CI publish artifacts), otherwise checks CI-provided environment variables, and finally falls back to assembly-stamped version metadata.
 - The shell script uses branch names like `feat/login` and `fix/login-bug`, with commit messages such as `feat(auth): ...` and `fix(auth): ...`.
 - Do **not** assume commit messages automatically change the preview base version. In this repo, `feat:` / `fix:` messages are examples for Git history simulation, not a proven auto-bump mechanism.
 

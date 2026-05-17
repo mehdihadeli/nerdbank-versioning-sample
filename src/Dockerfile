@@ -1,0 +1,51 @@
+﻿# syntax=docker/dockerfile:1.7
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+ARG VERSION=0.0.0-dev
+ARG ASSEMBLY_VERSION=0.0.0.0
+ARG INFORMATIONAL_VERSION=0.0.0-dev
+ARG NBGV_SEMVER=0.0.0-dev
+ARG DATE_STAMP
+ARG REVISION
+ARG COMMIT=local
+ARG DEPLOYMENT_ENVIRONMENT=dev
+
+COPY ["versioning-samples.csproj", "./"]
+RUN dotnet restore "./versioning-samples.csproj"
+
+COPY . .
+RUN dotnet publish "./versioning-samples.csproj" -c Release -o /app/publish \
+    -p:Version="${VERSION}" \
+    -p:AssemblyVersion="${ASSEMBLY_VERSION}" \
+    -p:InformationalVersion="${INFORMATIONAL_VERSION}"
+
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+ARG VERSION=0.0.0-dev
+ARG ASSEMBLY_VERSION=0.0.0.0
+ARG INFORMATIONAL_VERSION=0.0.0-dev
+ARG NBGV_SEMVER=0.0.0-dev
+ARG DATE_STAMP
+ARG REVISION
+ARG COMMIT=local
+ARG DEPLOYMENT_ENVIRONMENT=dev
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT}
+ENV APP_SEMVER=${VERSION}
+ENV APP_INFORMATIONAL_VERSION=${INFORMATIONAL_VERSION}
+ENV APP_NBGV_SEMVER=${NBGV_SEMVER}
+ENV APP_ASSEMBLY_VERSION=${ASSEMBLY_VERSION}
+ENV APP_DATE_STAMP=${DATE_STAMP}
+ENV APP_REVISION=${REVISION}
+ENV APP_COMMIT=${COMMIT}
+ENV APP_DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT}
+
+COPY --from=build /app/publish .
+
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "versioning-samples.dll"]
+
