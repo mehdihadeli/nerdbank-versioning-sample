@@ -45,10 +45,10 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore local tools
-        run: dotnet tool restore
+        run: dotnet tool restore --tool-manifest ./src/dotnet-tools.json
 
       - name: Restore dependencies
-        run: dotnet restore ./versioning-samples.csproj
+        run: dotnet restore ./src/versioning-samples.csproj
 
       - name: Restore test project dependencies
         run: dotnet restore ./tests/versioning-samples.Tests/versioning-samples.Tests.csproj
@@ -104,7 +104,7 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build ./versioning-samples.csproj -c Release --no-restore \
+          dotnet build ./src/versioning-samples.csproj -c Release --no-restore \
             -p:Version=${{ steps.version.outputs.semver }} \
             -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} \
             -p:InformationalVersion=${{ steps.version.outputs.informational_version }}
@@ -115,7 +115,7 @@ jobs:
 
       - name: Publish artifact files
         run: |
-          dotnet publish ./versioning-samples.csproj -c Release -o ./publish --no-restore \
+          dotnet publish ./src/versioning-samples.csproj -c Release -o ./publish --no-restore \
             -p:Version=${{ steps.version.outputs.semver }} \
             -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} \
             -p:InformationalVersion=${{ steps.version.outputs.informational_version }}
@@ -151,8 +151,8 @@ jobs:
       - name: Verify Docker image build
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./src
+          file: ./src/Dockerfile
           push: false
           tags: ${{ steps.image.outputs.name }}:${{ steps.version.outputs.docker_tag }}
           cache-from: type=gha,scope=${{ github.ref_name }}
@@ -204,8 +204,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./src
+          file: ./src/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
