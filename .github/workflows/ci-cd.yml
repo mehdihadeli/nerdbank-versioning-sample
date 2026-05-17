@@ -57,8 +57,8 @@ jobs:
         id: version
         shell: bash
         run: |
-          BASE_SEMVER=$(dotnet nbgv get-version -v SemVer2)
-          ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)
+          BASE_SEMVER=$(cd ./src && dotnet nbgv get-version -v SemVer2)
+          ASSEMBLY_VERSION=$(cd ./src && dotnet nbgv get-version -v AssemblyVersion)
           DATE_STAMP=$(date -u +'%y%j')
           REVISION=$(git rev-list --count HEAD)
           COMMIT=$(git rev-parse --short HEAD)
