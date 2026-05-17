@@ -1,0 +1,107 @@
+# .github/workflows/ci-cd.yml
+name: NBGV CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Calculate Version
+        id: version
+        run: |
+          BASE_SEMVER=$(dotnet nbgv get-version -v SemVer2)
+          ASSEMBLY_VERSION=$(dotnet nbgv get-version -v AssemblyVersion)
+          DATE_STAMP=$(date -u +'%y%j')
+          REVISION=$(git rev-list --count HEAD)
+          COMMIT=$(git rev-parse --short HEAD)
+
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            SEMVER="${GITHUB_REF#refs/tags/v}"
+            ENVIRONMENT="production"
+          elif [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            SEMVER="${GITHUB_REF#refs/tags/v}"
+            ENVIRONMENT="staging"
+          else
+            SEMVER="${BASE_SEMVER}.${DATE_STAMP}.${REVISION}"
+            ENVIRONMENT="dev"
+          fi
+
+          INFORMATIONAL_VERSION="${SEMVER}+sha.${COMMIT}"
+
+          echo "nbgv_semver=$BASE_SEMVER" >> $GITHUB_OUTPUT
+          echo "semver=$SEMVER" >> $GITHUB_OUTPUT
+          echo "assembly_version=$ASSEMBLY_VERSION" >> $GITHUB_OUTPUT
+          echo "informational_version=$INFORMATIONAL_VERSION" >> $GITHUB_OUTPUT
+          echo "date_stamp=$DATE_STAMP" >> $GITHUB_OUTPUT
+          echo "revision=$REVISION" >> $GITHUB_OUTPUT
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+
+          echo "📦 nbgv SemVer: $BASE_SEMVER"
+          echo "📦 Effective SemVer: $SEMVER"
+          echo "🎯 Environment: $ENVIRONMENT"
+
+      - name: Build
+        run: |
+          dotnet build ./versioning-samples.csproj -c Release \
+            -p:Version=${{ steps.version.outputs.semver }} \
+            -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} \
+            -p:InformationalVersion=${{ steps.version.outputs.informational_version }}
+
+      - name: Publish
+        run: |
+          dotnet publish ./versioning-samples.csproj -c Release -o ./publish \
+            -p:Version=${{ steps.version.outputs.semver }} \
+            -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} \
+            -p:InformationalVersion=${{ steps.version.outputs.informational_version }}
+
+          # Version metadata
+          cat > ./publish/version.json << EOF
+          {
+            "nbgvSemVer": "${{ steps.version.outputs.nbgv_semver }}",
+            "semVer": "${{ steps.version.outputs.semver }}",
+            "informationalVersion": "${{ steps.version.outputs.informational_version }}",
+            "dateStamp": "${{ steps.version.outputs.date_stamp }}",
+            "revision": "${{ steps.version.outputs.revision }}",
+            "commit": "${{ steps.version.outputs.commit }}",
+            "environment": "${{ steps.version.outputs.environment }}"
+          }
+          EOF
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ steps.version.outputs.semver }}
+          path: ./publish
+
+      - name: Deploy to Dev
+        if: steps.version.outputs.environment == 'dev'
+        run: echo "🚀 Deploying to DEV"
+
+      - name: Deploy to Staging
+        if: steps.version.outputs.environment == 'staging'
+        run: echo "🧪 Deploying to STAGING"
+
+      - name: Deploy to Production
+        if: steps.version.outputs.environment == 'production'
+        environment: production
+        run: echo "🎉 Deploying to PRODUCTION"
