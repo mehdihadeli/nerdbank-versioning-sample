@@ -15,9 +15,11 @@ A minimal ASP.NET Core sample that demonstrates:
 ## Local run
 
 ```powershell
-dotnet build .\versioning-samples.csproj
+dotnet tool restore
 
-dotnet run --project .\versioning-samples.csproj
+dotnet build .\src\versioning-samples.csproj
+
+dotnet run --project .\src\versioning-samples.csproj
 ```
 
 Then open:
@@ -30,6 +32,18 @@ http://localhost:5000/version
 
 ```powershell
 dotnet test .\tests\versioning-samples.Tests\versioning-samples.Tests.csproj
+```
+
+## Check the local version
+
+Run NBGV from the repository root:
+
+```powershell
+dotnet tool restore
+
+dotnet nbgv get-version
+dotnet nbgv get-version -v SemVer2
+dotnet nbgv get-version -v AssemblyInformationalVersion
 ```
 
 ## Docker build with CI-style version injection

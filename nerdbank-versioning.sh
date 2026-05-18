@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # nerdbank-versioning.sh
 # Validates the repo's planned-release GitHub Flow strategy with Nerdbank.GitVersioning.
 #
@@ -413,4 +413,5 @@ setup
 test_all
 summary
 cleanup
+
 

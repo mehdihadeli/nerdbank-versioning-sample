@@ -10,21 +10,24 @@
 - For the GitHub Flow model used here (`main` + short-lived feature/fix branches), the most practical strategy is **planned next version + preview height**: merges to `main` publish `X.Y.Z-preview.{height}` to dev, an RC tag promotes the same base version to staging, and a clean `vX.Y.Z` tag promotes to production.
 
 ## Files that matter most
-- `version.json`: canonical local version rules. Read this first for tag patterns, preview/release behavior, and cloud-build variables.
+- `version.json` (repo root): canonical local version rules. Read this first for tag patterns, preview/release behavior, and cloud-build variables.
 - `.github/workflows/ci-cd.yml`: release pipeline example; also shows how deployment environment is inferred from refs/tags.
 - `Dockerfile`: accepts CI-calculated version build args, passes them to `dotnet publish`, and exposes the calculated runtime version metadata through container environment variables.
-- `dotnet-tools.json` + `nerdbank-versioning.sh`: local tool restore plus a disposable Git history simulator for preview/RC/prod scenarios.
+- `dotnet-tools.json` (repo root) + `nerdbank-versioning.sh`: local tool restore plus a disposable Git history simulator for preview/RC/prod scenarios.
 - `Program.cs` + `VersionInfoProvider.cs`: minimal web host plus the `/version` endpoint; runtime version display prefers a sibling `version.json` file and falls back to assembly metadata stamped by `Nerdbank.GitVersioning`.
 - `tests/versioning-samples.Tests`: smoke test coverage for the `/version` endpoint.
 - `versioning-samples.csproj`: minimal ASP.NET Core project targeting `net10.0`; the only package reference is `Nerdbank.GitVersioning` for assembly/version stamping.
 
 ## Verified local workflow
 ```bash
-dotnet build
-
 dotnet tool restore
+
+dotnet nbgv get-version
+
+dotnet build ./src/versioning-samples.csproj
 ```
-- `dotnet build` succeeds locally with SDK `10.0.108`.
+- Root-level `dotnet nbgv get-version` works when the checkout is inside a Git repository.
+- `dotnet build ./src/versioning-samples.csproj` succeeds locally with SDK `10.0.108`.
 - `dotnet nbgv get-version ...` currently fails in this workspace because the checkout is **not inside a Git repository**.
 
 ## Repo-specific conventions
@@ -46,7 +49,7 @@ dotnet tool restore
 - Keep one version engine across local and CI whenever possible. Mixing `nbgv` locally and GitVersion in CI makes version outcomes harder to reason about.
 
 ## Tool recommendation
-- For .NET, prefer **Nerdbank.GitVersioning (`nbgv`)** if you want deterministic versions from Git history/tags and a repo-controlled `version.json`. It is already wired into this repo via `dotnet-tools.json`.
+- For .NET, prefer **Nerdbank.GitVersioning (`nbgv`)** if you want deterministic versions from Git history/tags and a repo-controlled `version.json`. It is already wired into this repo via the repo-root `dotnet-tools.json`.
 - Prefer `nbgv` especially when the workflow is: merge to `main` → dev prerelease, tag RC for staging, tag stable for production.
 - Use **GitVersion** only if you intentionally want CI-centric branch/tag inference and accept behavior that differs from local `nbgv` results.
 - Neither `nbgv` nor GitVersion natively implements the exact `feat`/`fix` sequence `0.1.0-preview.1` → `0.1.1-preview.2` → `0.2.0-preview.3`; that requires extra automation or manual version bumps.
