@@ -2,9 +2,9 @@
 name: NBGV CI/CD
 
 # GitHub Flow model for this sample:
-# - PR merges to main -> dev build/test/docker-build using calculated dev version
-# - vX.Y.Z-rc.N tag   -> staging build/test/docker-build using RC version
-# - vX.Y.Z tag        -> production build/test/docker-build using stable version
+# - PR merges to main -> dev build/test/docker-build using Microsoft-style preview SemVer
+# - vX.Y.Z-rc.N tag   -> staging build/test/docker-build when tag matches NBGV version
+# - vX.Y.Z tag        -> production build/test/docker-build when tag matches NBGV version
 #
 # Note: the workflow observes pushes to main. To ensure these are merged PRs
 # rather than direct commits, protect the main branch in repository settings.
@@ -64,14 +64,28 @@ jobs:
           COMMIT=$(git rev-parse --short HEAD)
 
           if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            SEMVER="${GITHUB_REF#refs/tags/v}"
+            EXPECTED_REF="refs/tags/v${BASE_SEMVER}"
+            if [[ "${GITHUB_REF}" != "${EXPECTED_REF}" ]]; then
+              echo "Stable tag ${GITHUB_REF} does not match NBGV version ${BASE_SEMVER}."
+              echo "Update version.json on main and create tag with 'dotnet nbgv tag'."
+              exit 1
+            fi
             ENVIRONMENT="production"
           elif [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            SEMVER="${GITHUB_REF#refs/tags/v}"
+            EXPECTED_REF="refs/tags/v${BASE_SEMVER}"
+            if [[ "${GITHUB_REF}" != "${EXPECTED_REF}" ]]; then
+              echo "RC tag ${GITHUB_REF} does not match NBGV version ${BASE_SEMVER}."
+              echo "Update version.json on main and create tag with 'dotnet nbgv tag'."
+              exit 1
+            fi
             ENVIRONMENT="staging"
           else
             SEMVER="${BASE_SEMVER}.${DATE_STAMP}.${REVISION}+${COMMIT}"
             ENVIRONMENT="dev"
+          fi
+
+          if [[ -z "${SEMVER:-}" ]]; then
+            SEMVER="${BASE_SEMVER}"
           fi
 
           if [[ "${SEMVER}" == *+* ]]; then
@@ -169,6 +183,8 @@ jobs:
 
   cd:
     needs: ci
+    # Deploy dev only for preview builds; staging/prod still deploy by tag.
+    if: ${{ needs.ci.outputs.environment != 'dev' || contains(needs.ci.outputs.semver, '-preview.') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

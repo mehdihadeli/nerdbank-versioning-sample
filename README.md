@@ -18,7 +18,17 @@ The best practice for this sample is: **`version.json` is the source of truth, a
 - `staging`: push tag `vX.Y.Z-rc.N` only after `version.json` on `main` is `X.Y.Z-rc.{height}`
 - `production`: push tag `vX.Y.Z` only after `version.json` on `main` is `X.Y.Z`
 
-### Invariant: local and CI versions must match
+### Preview version format in CI/CD
+
+This sample uses two related preview version shapes:
+
+- **base NBGV preview version** (local and canonical): `1.0.0-preview.3`
+- **effective CI preview version** (dev artifacts/images): `1.0.0-preview.3.26138.7+35f10a7`
+- **Docker-safe image tag**: `1.0.0-preview.3.26138.7-35f10a7`
+
+That effective CI preview pattern is intentionally similar to Microsoft prerelease packages such as EF Core or ASP.NET Core (`10.0.0-preview.7.25380.108`), but this sample also appends the short git SHA for easier traceability.
+
+### Invariant: local and CI versions must match where promotion matters
 
 Before creating any RC or stable tag, local and CI should resolve the same semantic version from NBGV:
 
@@ -26,6 +36,8 @@ Before creating any RC or stable tag, local and CI should resolve the same seman
 - CI: `dotnet nbgv get-version -v SemVer2` in workflow
 
 If local says `1.0.0-preview.3`, tagging `v1.0.0-rc.1` is incorrect and CI should fail validation.
+
+For ordinary dev builds on `main`, CI intentionally extends the base preview with `yyDDD.revision+shortsha` to create a richer prerelease artifact version.
 
 NBGV's CLI documentation describes release preparation as changing the version in `version.json` for the release/stabilization line, then creating a version tag from that NBGV-calculated version. In this repo's GitHub Flow variant, we keep that same principle but do it on `main` instead of maintaining long-lived release branches:
 
@@ -97,6 +109,15 @@ For repeatable steps, use the helper script in this repo:
 ./release-version.sh --help
 ```
 
+### Two approaches for RC/stable tag creation
+
+1. **Simple (local tagging):** after the version PR is merged to `main`, run `./release-version.sh tag --push` locally.
+2. **Controlled (dispatch tagging):** run one of these manual workflows in GitHub Actions:
+   - `.github/workflows/staging-release-dispatch.yml`
+   - `.github/workflows/production-release-dispatch.yml`
+
+Dispatch workflows create/push the tag from GitHub after validating version/ref inputs, then `ci-cd.yml` handles deployment.
+
 ### Preview development
 
 Keep `version.json` on the planned preview train during normal development:
@@ -107,7 +128,15 @@ Keep `version.json` on the planned preview train during normal development:
 }
 ```
 
-A push to `main` builds and deploys to `dev` with the NBGV preview version.
+A push to `main` builds and deploys to `dev` with a Microsoft-style preview SemVer derived from the base NBGV preview version.
+
+Example:
+
+```text
+base NBGV preview:    1.0.0-preview.3
+effective dev SemVer: 1.0.0-preview.3.26138.7+35f10a7
+docker image tag:     1.0.0-preview.3.26138.7-35f10a7
+```
 
 ### Enter RC / staging
 
@@ -139,7 +168,7 @@ git pull --ff-only origin main
 ./release-version.sh tag --push
 ```
 
-The tag `v1.0.0-rc.4` deploys to `staging`. If another fix is merged while `version.json` remains on an RC train, run `./release-version.sh tag --push` again after the merge for the next RC value.
+The tag `v1.0.0-rc.4` deploys to `staging`. If another fix is merged while `version.json` remains on an RC train, run `./release-version.sh tag --push` again after the merge for the next RC value, or run the `Staging Release Dispatch` workflow.
 
 ### Promote to production
 
@@ -165,7 +194,7 @@ git pull --ff-only origin main
 ./release-version.sh tag --push
 ```
 
-The tag `v1.0.0` deploys to `production`.
+The tag `v1.0.0` deploys to `production`. You can create it locally (`./release-version.sh tag --push`) or via the `Production Release Dispatch` workflow.
 
 ### Start the next release train
 
@@ -210,11 +239,13 @@ dotnet publish -p:Version=... -p:AssemblyVersion=... -p:InformationalVersion=...
 
 The Docker image does not generate a `version.json` file. Instead, the workflow passes the calculated version values into `dotnet publish` and also promotes them into container environment variables. The running container reads those CI-selected values first, then falls back to assembly metadata when no runtime override is present.
 
-> Note: Docker image tags cannot contain the `+` used by SemVer build metadata. The workflow keeps build metadata in `InformationalVersion` and the app's `/version` payload, while publishing the container image with a Docker-safe tag if build metadata is ever present in the tag source.
+> Note: Docker image tags cannot contain the `+` used by SemVer build metadata. The workflow keeps build metadata in `InformationalVersion` and the app's `/version` payload, while publishing the container image with a Docker-safe tag. For example, `1.0.0-preview.3.26138.7+35f10a7` becomes `1.0.0-preview.3.26138.7-35f10a7` as an image tag.
 
 ## GitHub Actions behavior
 
-- push to `main` -> dev version from `dotnet nbgv get-version -v SemVer2`, dev image, deploy to `dev`
+- push to `main` -> CI validation always runs with base version from `dotnet nbgv get-version -v SemVer2`
+- push to `main` + preview version -> dev image and deploy to `dev` using effective preview version `X.Y.Z-preview.N.YYDDD.REVISION+SHORTSHA`
+- push to `main` + RC/stable version -> CI only, `dev` deployment is skipped
 - tag `vX.Y.Z-rc.N` -> staging image, deploy to `staging`, only if tag equals the NBGV version
 - tag `vX.Y.Z` -> production image, deploy to `production`, only if tag equals the NBGV version
 

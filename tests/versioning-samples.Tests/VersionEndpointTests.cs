@@ -5,19 +5,13 @@ using Xunit;
 
 namespace versioning_samples.Tests;
 
-public class VersionEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class VersionEndpointTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
 {
-    private readonly WebApplicationFactory<Program> _factory;
-
-    public VersionEndpointTests(WebApplicationFactory<Program> factory)
-    {
-        _factory = factory;
-    }
-
     [Fact]
     public async Task Version_endpoint_returns_version_information()
     {
-        using var client = _factory.CreateClient();
+        using var client = factory.CreateClient();
 
         var payload = await client.GetFromJsonAsync<AppVersionInfo>("/version");
 
