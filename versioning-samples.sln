@@ -4,12 +4,27 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution folder", "solution folder", "{5F569990-87CE-4EA3-82A0-82828821CFEB}"
+	ProjectSection(SolutionItems) = preProject
+		.csharpierignore = .csharpierignore
+		.dockerignore = .dockerignore
+		.editorconfig = .editorconfig
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		AGENTS.md = AGENTS.md
+		dotnet-tools.json = dotnet-tools.json
+		nerdbank-versioning.sh = nerdbank-versioning.sh
+		README.md = README.md
+		release-version.sh = release-version.sh
+		version.json = version.json
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{25555D1F-5885-491F-849E-959A22033478}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{22BB2D1A-D582-493E-8AB2-7B105817C5DA}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\ci-cd.yml = .github\workflows\ci-cd.yml
+		.github\workflows\production-release-dispatch.yml = .github\workflows\production-release-dispatch.yml
+		.github\workflows\staging-release-dispatch.yml = .github\workflows\staging-release-dispatch.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".agents", ".agents", "{B0493CF1-4D6E-56FF-9B5B-DBAE784DE638}"

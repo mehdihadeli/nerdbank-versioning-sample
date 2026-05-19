@@ -1,0 +1,78 @@
+﻿name: Staging Release Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_version:
+        description: "Expected NBGV RC SemVer2 (example: 1.0.0-rc.6). Leave empty to use computed version."
+        required: false
+        type: string
+      target_ref:
+        description: "Git ref to tag (usually main)."
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-staging-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Validate ref is on main
+        shell: bash
+        run: |
+          git fetch origin main --prune
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Ref '${{ inputs.target_ref }}' is not on origin/main."
+            exit 1
+          fi
+
+      - name: Validate RC version and create tag
+        id: tag
+        shell: bash
+        run: |
+          SEMVER=$(dotnet nbgv get-version -v SemVer2)
+
+          if [[ ! "$SEMVER" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Computed SemVer '$SEMVER' is not an RC version."
+            exit 1
+          fi
+
+          if [[ -n "${{ inputs.expected_version }}" ]] && [[ "$SEMVER" != "${{ inputs.expected_version }}" ]]; then
+            echo "Expected '${{ inputs.expected_version }}' but computed '$SEMVER'."
+            exit 1
+          fi
+
+          TAG="v$SEMVER"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            echo "Tag '$TAG' already exists on origin."
+            exit 1
+          fi
+
+          dotnet nbgv tag
+          git push origin "$TAG"
+
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          echo "Created and pushed staging tag: ${{ steps.tag.outputs.tag }}"
+          echo "SemVer: ${{ steps.tag.outputs.semver }}"
+
