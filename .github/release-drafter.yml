@@ -1,98 +1,164 @@
+# https://johanneskonings.dev/github/2021/02/28/github_automatic_releases_and-changelog/
+# https://tiagomichaelsousa.dev/articles/stop-writing-your-changelogs-manually
+
+# This release drafter follows the conventions
+# from https://keepachangelog.com
+
+# https://github.com/release-drafter/release-drafter/issues/551
+# https://github.com/release-drafter/release-drafter/pull/1013
+# https://github.com/release-drafter/release-drafter/issues/139
+# https://github.com/atk4/data/blob/develop/.github/release-drafter.yml
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 include-pre-releases: false
 template: |
-  ## What Changed
+  ## What Changed 👀
   $CHANGES
   **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
 categories:
-  - title: Features
+  - title: 🚀 Features
     when:
       labels:
         - feature
         - feat
-  - title: Enhancements
+  - title: ♻️ Enhancement
     when:
       labels:
         - enhancement
         - refactor
-  - title: Bug Fixes
+  - title: 🐛 Bug Fixes
     when:
       labels:
         - fix
         - bug
-  - title: CI
+  - title: 👷 CI
     when:
       labels:
         - ci
         - ci-cd
         - devops
-  - title: Breaking Changes
+  - title: ⚠️ Breaking Changes
     when:
       labels:
         - breaking-changes
         - major
-  - title: Documentation
+  - title: ⛔️ Deprecated
+    when:
+      label: deprecated
+  - title: 🗑 Removed
+    when:
+      label: removed
+  - title: 🔐 Security
+    when:
+      label: security
+  - title: 🎨 Style & Formatting
+    when:
+      label: style
+  - title: 🧪 Test
+    when:
+      label: test
+  - title: 📄 Documentation
     when:
       labels:
         - docs
         - documentation
-  - title: Tests
+  - title: 🧩 Dependency Updates
     when:
       labels:
-        - test
-  - title: Maintenance
+        - deps
+        - build
+        - dependencies
+  - title: 🧰 Maintenance
+    when:
+      label: chore
+  - title: 🧺 Miscellaneous #Everything except ABAP
+    when:
+      label: misc
+  - title: 🚩 Other changes
+    ## putting no labels pr to `Other Changes` category with no label - https://github.com/release-drafter/release-drafter/issues/139#issuecomment-480473934
+
+  - type: pre-exclude
+    when:
+      label: skip-changelog
+
+  - type: version-resolver
+    semver-increment: major
     when:
       labels:
-        - chore
-  - title: Other Changes
+        - breaking-changes
+        - major
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      label: minor
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      label: patch
+  - type: version-resolver
+    semver-increment: patch
 
-exclude-labels:
-  - skip-changelog
-
-version-resolver:
-  major:
-    labels:
-      - breaking-changes
-      - major
-  minor:
-    labels:
-      - minor
-  patch:
-    labels:
-      - patch
-  default: patch
-
-change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
-change-title-escapes: '\<*_&'
+# https://www.trywilco.com/post/wilco-ci-cd-github-heroku
+# https://github.com/release-drafter/release-drafter#autolabeler
+# https://github.com/fuxingloh/multi-labeler
+# Using regex for defining rules - https://regexr.com/
+# https://stackoverflow.com/questions/58899999/regexp-to-match-conventional-commit-syntax
+# Note: because of escaping logic inside of release drafter our regex should be escaped correctly and drafter wil un-escape it internally
+# - Escaped regex: When writing a regular expression as a string in code, special characters like (, ), and : need to be escaped with a backslash (\) because these characters have special meanings in regex.
+# - Unescaped regex: If you use a raw regex literal (i.e., surrounded by slashes /.../), the regex engine interprets it directly, and you don’t need to double-escape the special characters.
 autolabeler:
-  - label: chore
+  - label: "chore"
     branch:
       - '/^(chore)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(chore)(\([a-z ]+\))?: .+/'
-  - label: documentation
+  - label: "enhancement"
+    branch:
+      - '/^(refactor)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(refactor)(\([a-z ]+\))?: .+/'
+  - label: "documentation"
     branch:
       - '/^(docs)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(docs)(\([a-z ]+\))?: .+/'
-  - label: ci-cd
+  - label: "ci-cd"
     branch:
       - '/^(ci)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(ci)(\([a-z ]+\))?: .+/'
-  - label: test
+  - label: "test"
     branch:
       - '/^(test)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(test)(\([a-z ]+\))?: .+/'
-  - label: bug
+  - label: "bug"
     branch:
       - '/^(fix)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(fix)(\([a-z ]+\))?: .+/'
-  - label: feature
+  - label: "style"
+    branch:
+      - '/^(style)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(style)(\([a-z ]+\))?: .+/'
+  - label: "feature"
     branch:
       - '/^(feat)(\([a-z ]+\))?\/.+/'
     title:
       - '/^(feat)(\([a-z ]+\))?: .+/'
+  - label: "minor"
+    branch:
+      - '/^(feat)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(feat)(\([a-z ]+\))?: .+/'
+  - label: "patch"
+    branch:
+      - '/^(fix)(\([a-z ]+\))?\/.+/'
+      - '/^(ci)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(fix)(\([a-z ]+\))?: .+/'
+      - '/^(ci)(\([a-z ]+\))?: .+/'
+
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
