@@ -125,7 +125,7 @@ public static class VersionInfoProvider
             Environment.GetEnvironmentVariable("APP_COMMIT"),
             Environment.GetEnvironmentVariable("APP_DEPLOYMENT_ENVIRONMENT")
                 ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
-            "environment variables (CI/CD effective version)"
+            "environment variables (CI/CD version)"
         );
     }
 

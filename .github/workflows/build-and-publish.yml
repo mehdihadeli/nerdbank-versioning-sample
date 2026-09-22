@@ -1,0 +1,184 @@
+name: Build, test, and publish
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  REGISTRY: ghcr.io
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Restore application
+        run: dotnet restore ./src/versioning-samples.csproj
+
+      - name: Restore tests
+        run: dotnet restore ./tests/versioning-samples.Tests/versioning-samples.Tests.csproj
+
+      - name: Build
+        run: dotnet build ./src/versioning-samples.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ./tests/versioning-samples.Tests/versioning-samples.Tests.csproj --configuration Release --no-restore
+
+  calculate-version:
+    name: Calculate release version
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    needs: build-test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      assembly_version: ${{ steps.version.outputs.assembly_version }}
+      informational_version: ${{ steps.version.outputs.informational_version }}
+      environment: ${{ steps.version.outputs.environment }}
+      docker_tag: ${{ steps.version.outputs.docker_tag }}
+      commit: ${{ steps.version.outputs.commit }}
+      image_name: ${{ steps.image.outputs.name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Calculate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          nbgv="$RUNNER_TEMP/nbgv/nbgv"
+          dotnet tool install --tool-path "$RUNNER_TEMP/nbgv" nbgv --version 3.10.94
+          version="$($nbgv get-version -v SemVer2)"
+          assembly_version="$($nbgv get-version -v AssemblyVersion)"
+          commit="$(git rev-parse --short HEAD)"
+
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            expected_ref="refs/tags/v${version}"
+            if [[ "${GITHUB_REF}" != "${expected_ref}" ]]; then
+              echo "Tag ${GITHUB_REF} does not match NBGV version ${version}."
+              exit 1
+            fi
+            if [[ "${version}" == *-rc.* ]]; then
+              environment="staging"
+            else
+              environment="production"
+            fi
+          else
+            if [[ "${version}" != *-preview.* ]]; then
+              echo "A main build must use an explicit -preview.N version; got ${version}."
+              exit 1
+            fi
+            environment="dev"
+          fi
+
+          informational_version="${version}+${commit}"
+          docker_tag="${version/+/-}"
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "assembly_version=${assembly_version}" >> "$GITHUB_OUTPUT"
+          echo "informational_version=${informational_version}" >> "$GITHUB_OUTPUT"
+          echo "environment=${environment}" >> "$GITHUB_OUTPUT"
+          echo "docker_tag=${docker_tag}" >> "$GITHUB_OUTPUT"
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "Calculated SemVer2 version: ${version}"
+          echo "Target environment: ${environment}"
+
+      - name: Prepare image name
+        id: image
+        shell: bash
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish container and release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(needs['calculate-version'].outputs.version, '-preview.'))
+    needs:
+      - build-test
+      - calculate-version
+    runs-on: ubuntu-latest
+    environment: ${{ needs['calculate-version'].outputs.environment }}
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          file: ./src/Dockerfile
+          push: true
+          tags: |
+            ${{ needs['calculate-version'].outputs.image_name }}:${{ needs['calculate-version'].outputs.docker_tag }}
+            ${{ needs['calculate-version'].outputs.image_name }}:${{ needs['calculate-version'].outputs.environment }}
+            ${{ needs['calculate-version'].outputs.image_name }}:latest
+          build-args: |
+            VERSION=${{ needs['calculate-version'].outputs.version }}
+            ASSEMBLY_VERSION=${{ needs['calculate-version'].outputs.assembly_version }}
+            INFORMATIONAL_VERSION=${{ needs['calculate-version'].outputs.informational_version }}
+            NBGV_SEMVER=${{ needs['calculate-version'].outputs.version }}
+            COMMIT=${{ needs['calculate-version'].outputs.commit }}
+            DEPLOYMENT_ENVIRONMENT=${{ needs['calculate-version'].outputs.environment }}
+
+      - name: Update or publish Release Drafter release
+        if: always()
+        uses: release-drafter/release-drafter@v7
+        with:
+          config-name: release-drafter.yml
+          version: ${{ needs['calculate-version'].outputs.version }}
+          name: v${{ needs['calculate-version'].outputs.version }}
+          tag: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', needs['calculate-version'].outputs.version) }}
+          publish: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(needs['calculate-version'].outputs.version, '-preview.') }}
+          prerelease: ${{ contains(needs['calculate-version'].outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy selected image
+        run: |
+          echo "Deploying ${{ needs['calculate-version'].outputs.image_name }}:${{ needs['calculate-version'].outputs.docker_tag }}"
+          echo "Target environment: ${{ needs['calculate-version'].outputs.environment }}"
