@@ -77,26 +77,21 @@ categories:
   - title: 🚩 Other changes
     ## putting no labels pr to `Other Changes` category with no label - https://github.com/release-drafter/release-drafter/issues/139#issuecomment-480473934
 
-  - type: pre-exclude
-    when:
-      label: skip-changelog
+exclude-labels:
+  - skip-changelog
 
-  - type: version-resolver
-    semver-increment: major
-    when:
-      labels:
-        - breaking-changes
-        - major
-  - type: version-resolver
-    semver-increment: minor
-    when:
-      label: minor
-  - type: version-resolver
-    semver-increment: patch
-    when:
-      label: patch
-  - type: version-resolver
-    semver-increment: patch
+version-resolver:
+  major:
+    labels:
+      - breaking-changes
+      - major
+  minor:
+    labels:
+      - minor
+  patch:
+    labels:
+      - patch
+  default: patch
 
 # https://www.trywilco.com/post/wilco-ci-cd-github-heroku
 # https://github.com/release-drafter/release-drafter#autolabeler
