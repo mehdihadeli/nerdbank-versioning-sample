@@ -45,26 +45,21 @@ categories:
       label: chore
   - title: Other Changes
 
-  - type: pre-exclude
-    when:
-      label: skip-changelog
+exclude-labels:
+  - skip-changelog
 
-  - type: version-resolver
-    semver-increment: major
-    when:
-      labels:
-        - breaking-changes
-        - major
-  - type: version-resolver
-    semver-increment: minor
-    when:
-      label: minor
-  - type: version-resolver
-    semver-increment: patch
-    when:
-      label: patch
-  - type: version-resolver
-    semver-increment: patch
+version-resolver:
+  major:
+    labels:
+      - breaking-changes
+      - major
+  minor:
+    labels:
+      - minor
+  patch:
+    labels:
+      - patch
+  default: patch
 
 change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 change-title-escapes: '\<*_&'
