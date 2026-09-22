@@ -38,7 +38,7 @@ internal sealed class VersioningSandbox : IDisposable
         );
 
         var sandbox = new VersioningSandbox(sandboxPath);
-        sandbox.SetVersionValue("1.0.0-preview.{height}");
+        sandbox.SetVersionValue("1.0.0-preview.1");
 
         sandbox.Run("git", "init");
         sandbox.Run("git", "config", "user.email", "test@test.com");
@@ -79,15 +79,6 @@ internal sealed class VersioningSandbox : IDisposable
         int.Parse(Run("git", "rev-list", "--count", "HEAD"), CultureInfo.InvariantCulture);
 
     public string GetCommitShort() => Run("git", "rev-parse", "--short", "HEAD");
-
-    public string GetDateStampUtc()
-    {
-        var utcNow = DateTime.UtcNow;
-        return $"{utcNow:yy}{utcNow.DayOfYear:D3}";
-    }
-
-    public string GetExpectedDevVersion(string baseSemVer) =>
-        $"{baseSemVer}.{GetDateStampUtc()}.{GetRevision()}+{GetCommitShort()}";
 
     public string GetExpectedDockerTag(string effectiveSemVer) => effectiveSemVer.Replace('+', '-');
 
@@ -131,7 +122,7 @@ internal sealed class VersioningSandbox : IDisposable
 
     public void PrepareNextPreviewTrain(string nextStableVersion)
     {
-        var target = $"{nextStableVersion}-preview.{{height}}";
+        var target = $"{nextStableVersion}-preview.1";
         SetVersionValue(target);
         Run("git", "add", "version.json");
         Run("git", "commit", "-m", $"chore(version): start {nextStableVersion}", "--no-verify");

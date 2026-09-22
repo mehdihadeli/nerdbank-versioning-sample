@@ -22,9 +22,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{2555
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{22BB2D1A-D582-493E-8AB2-7B105817C5DA}"
 	ProjectSection(SolutionItems) = preProject
-		.github\workflows\ci-cd.yml = .github\workflows\ci-cd.yml
-		.github\workflows\production-release-dispatch.yml = .github\workflows\production-release-dispatch.yml
-		.github\workflows\staging-release-dispatch.yml = .github\workflows\staging-release-dispatch.yml
+		.github\workflows\build-and-publish.yml = .github\workflows\build-and-publish.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".agents", ".agents", "{B0493CF1-4D6E-56FF-9B5B-DBAE784DE638}"

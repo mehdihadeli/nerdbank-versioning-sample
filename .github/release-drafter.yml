@@ -1,0 +1,101 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+include-pre-releases: false
+template: |
+  ## What Changed
+  $CHANGES
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+categories:
+  - title: Features
+    when:
+      labels:
+        - feature
+        - feat
+  - title: Enhancements
+    when:
+      labels:
+        - enhancement
+        - refactor
+  - title: Bug Fixes
+    when:
+      labels:
+        - fix
+        - bug
+  - title: CI
+    when:
+      labels:
+        - ci
+        - ci-cd
+        - devops
+  - title: Breaking Changes
+    when:
+      labels:
+        - breaking-changes
+        - major
+  - title: Documentation
+    when:
+      labels:
+        - docs
+        - documentation
+  - title: Tests
+    when:
+      label: test
+  - title: Maintenance
+    when:
+      label: chore
+  - title: Other Changes
+
+  - type: pre-exclude
+    when:
+      label: skip-changelog
+
+  - type: version-resolver
+    semver-increment: major
+    when:
+      labels:
+        - breaking-changes
+        - major
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      label: minor
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      label: patch
+  - type: version-resolver
+    semver-increment: patch
+
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+change-title-escapes: '\<*_&'
+autolabeler:
+  - label: chore
+    branch:
+      - '/^(chore)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(chore)(\([a-z ]+\))?: .+/'
+  - label: documentation
+    branch:
+      - '/^(docs)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(docs)(\([a-z ]+\))?: .+/'
+  - label: ci-cd
+    branch:
+      - '/^(ci)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(ci)(\([a-z ]+\))?: .+/'
+  - label: test
+    branch:
+      - '/^(test)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(test)(\([a-z ]+\))?: .+/'
+  - label: bug
+    branch:
+      - '/^(fix)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(fix)(\([a-z ]+\))?: .+/'
+  - label: feature
+    branch:
+      - '/^(feat)(\([a-z ]+\))?\/.+/'
+    title:
+      - '/^(feat)(\([a-z ]+\))?: .+/'

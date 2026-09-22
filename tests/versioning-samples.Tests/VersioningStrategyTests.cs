@@ -14,12 +14,12 @@ public sealed class VersioningStrategyTests
         sandbox.CreateBranch("feat/login");
         sandbox.CommitChange("feat(auth): add authentication");
         sandbox.MergeSquashToMain("feat/login");
-        AssertPreviewState(sandbox, "1.0.0-preview.2", expectedRevision: 2);
+        AssertPreviewState(sandbox, "1.0.0-preview.1", expectedRevision: 2);
 
         sandbox.CreateBranch("fix/login-bug");
         sandbox.CommitChange("fix(auth): resolve token issue");
         sandbox.MergeSquashToMain("fix/login-bug");
-        AssertPreviewState(sandbox, "1.0.0-preview.3", expectedRevision: 3);
+        AssertPreviewState(sandbox, "1.0.0-preview.1", expectedRevision: 3);
     }
 
     [Fact]
@@ -66,12 +66,12 @@ public sealed class VersioningStrategyTests
         sandbox.CreateBranch("feat/login");
         sandbox.CommitChange("feat(auth): add authentication");
         sandbox.MergeSquashToMain("feat/login");
-        AssertPreviewState(sandbox, "1.0.0-preview.2", expectedRevision: 2);
+        AssertPreviewState(sandbox, "1.0.0-preview.1", expectedRevision: 2);
 
         sandbox.CreateBranch("fix/login-bug");
         sandbox.CommitChange("fix(auth): resolve token issue");
         sandbox.MergeSquashToMain("fix/login-bug");
-        AssertPreviewState(sandbox, "1.0.0-preview.3", expectedRevision: 3);
+        AssertPreviewState(sandbox, "1.0.0-preview.1", expectedRevision: 3);
 
         sandbox.PrepareStaging("1.0.0", 1);
         Assert.Equal("1.0.0-rc.1", sandbox.GetSemVer2());
@@ -104,15 +104,12 @@ public sealed class VersioningStrategyTests
     )
     {
         var actualBaseSemVer = sandbox.GetSemVer2();
-        var effectiveDevVersion = sandbox.GetExpectedDevVersion(actualBaseSemVer);
+        var effectiveDevVersion = actualBaseSemVer;
         var expectedDockerTag = sandbox.GetExpectedDockerTag(effectiveDevVersion);
 
         Assert.Equal(expectedBaseSemVer, actualBaseSemVer);
         Assert.Equal(expectedRevision, sandbox.GetRevision());
-        Assert.Equal(
-            $"{expectedBaseSemVer}.{sandbox.GetDateStampUtc()}.{expectedRevision}+{sandbox.GetCommitShort()}",
-            effectiveDevVersion
-        );
+        Assert.Equal(expectedBaseSemVer, effectiveDevVersion);
         Assert.Equal(effectiveDevVersion.Replace('+', '-'), expectedDockerTag);
         Assert.Contains("preview", sandbox.GetAssemblyInformationalVersion());
     }
