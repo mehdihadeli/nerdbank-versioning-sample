@@ -39,10 +39,12 @@ categories:
         - documentation
   - title: Tests
     when:
-      label: test
+      labels:
+        - test
   - title: Maintenance
     when:
-      label: chore
+      labels:
+        - chore
   - title: Other Changes
 
 exclude-labels:
