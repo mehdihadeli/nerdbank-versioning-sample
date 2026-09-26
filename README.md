@@ -11,31 +11,35 @@ A minimal ASP.NET Core sample that demonstrates:
 
 ## Correct versioning approach
 
-The best practice for this sample is: **`version.json` is the source of truth, and CI must not invent a different RC or stable version.**
+The best practice for this sample is: **`version.json` is the source of truth, and CI must not invent a different release ordinal or stable version.** CI may add the date and run revision to published preview and RC artifacts.
 
 ### Environment mapping (GitHub Flow)
 
-- `dev`: push/merge to `main` while `version.json` is on `X.Y.Z-preview.{height}`
-- `staging`: push tag `vX.Y.Z-rc.N` only after `version.json` on `main` is `X.Y.Z-rc.{height}`
+- `dev`: push/merge to `main` producing `X.Y.Z-preview.1.YYDDD.RUN_NUMBER` or later
+- validation only: the initial repository setup calculates `1.0.0-preview.0` but is not published
+- `staging`: push tag `vX.Y.Z-rc.N` only after `version.json` on `main` is `X.Y.Z-rc.{height}`; publish `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`
 - `production`: push tag `vX.Y.Z` only after `version.json` on `main` is `X.Y.Z`
 
-The CI workflow uses one publish path. It publishes the calculated preview
-package and container from `main`, while RC and stable tags also publish the
-matching Release Drafter release. Preview releases remain drafts; RC and stable
-tags publish them.
+The CI workflow uses one publish path. It publishes preview packages and
+containers from `main` starting at `preview.1`; the train-start commit at
+`preview.0` is validated but not published. RC and stable tags also publish
+the matching Release Drafter release. Preview releases remain drafts; RC and
+stable tags publish them.
 
 ### Preview version format in CI/CD
 
-The canonical and effective preview version are the same NBGV value calculated
-from Git commit height:
+NBGV supplies the preview ordinal from Git commit height. CI adds a UTC date and
+GitHub Actions run revision to published previews:
 
 ```text
-1.0.0-preview.5
+1.0.0-preview.5.26085.123
 ```
 
-The Git commit remains available in assembly informational metadata and the
-container image digest. CI does not invent a second semantic version or append
-a height/date suffix.
+The format is `X.Y.Z-preview.N.YYDDD.RUN_NUMBER` for previews and
+`X.Y.Z-rc.N.YYDDD.RUN_NUMBER` for RCs. `N` is the NBGV ordinal, `YYDDD` is the
+UTC two-digit year and day of year, and `RUN_NUMBER` is the GitHub Actions
+workflow run number. Stable versions remain exact NBGV versions so release tags
+continue to match.
 
 ### Invariant: local and CI versions must match where promotion matters
 
@@ -55,6 +59,21 @@ The initial preview configuration scopes its `-1` height offset to
 commit therefore becomes `1.0.0-rc.1`, and the first RC-fix commit becomes
 `1.0.0-rc.2`.
 
+The `-1` value is intentional: it reserves the first calculated height for the
+initial repository setup commit. NBGV reports that commit as
+`1.0.0-preview.0`, but CI treats it as validation-only. The first ordinary
+feature merge is therefore the first published preview, `1.0.0-preview.1`.
+
+This offset is not reused for later release trains. `prepare-train` removes the
+offset properties, so the commit that starts `1.1.0` is `1.1.0-preview.1` and
+the first feature merged into that train is `1.1.0-preview.2`.
+
+If the initialization commit should itself be the first published preview,
+change `versionHeightOffset` to `0`. The sequence then becomes
+`preview.1` for initialization, `preview.2` for the first feature, and
+`preview.3` for the second feature. This removes the validation-only
+`preview.0` step, but it changes the meaning of every later preview number.
+
 `publicReleaseRefSpec` identifies public release refs; it does not make NBGV
 infer a new version from an arbitrary tag. `nbgv get-version` still calculates
 from `version.json` and Git height. Therefore, change the version template to
@@ -69,6 +88,20 @@ tags are created only after the merge has completed. The comments show the
 expected semantic version after each merge or tag:
 
 ```bash
+# Initialize the 1.0.0 preview train. This commit establishes version.json,
+# calculates 1.0.0-preview.0, and is validated but not published by CI.
+git switch main
+git pull --ff-only
+git switch -c chore/initialize-1.0.0-preview
+dotnet nbgv set-version "1.0.0-preview.{height}"
+git add version.json
+git commit -m "chore: initialize 1.0.0 preview train"
+git switch main
+git merge --squash chore/initialize-1.0.0-preview
+git commit -m "chore: initialize 1.0.0 preview train"
+git branch -d chore/initialize-1.0.0-preview
+# Version produced on main: 1.0.0-preview.0 (validation only)
+
 # First feature: merge to main produces 1.0.0-preview.1.
 git switch main
 git pull --ff-only
@@ -151,7 +184,8 @@ git push origin v1.0.0
 # git add version.json && git commit -m "chore: prepare 1.0.0"
 # ./release-version.sh tag
 
-# Start the 1.1.0 preview train. The train commit calculates preview.0.
+# Start the 1.1.0 preview train. Later trains do not reuse the bootstrap offset,
+# so the train commit is the first published preview.
 git switch -c chore/prepare-1.1.0-preview
 dotnet nbgv set-version "1.1.0-preview.{height}"
 # Helper equivalent: use this on the release-preparation branch instead of the
@@ -163,9 +197,9 @@ git switch main
 git merge --squash chore/prepare-1.1.0-preview
 git commit -m "chore: start 1.1.0 preview train"
 git branch -d chore/prepare-1.1.0-preview
-# Version produced on main: 1.1.0-preview.0
+# Version produced on main: 1.1.0-preview.1
 
-# First feature in the new train: merge to main produces 1.1.0-preview.1.
+# First feature in the new train: merge to main produces 1.1.0-preview.2.
 git switch -c feature/add-authorization
 git add -A
 git commit -m "feat: add authorization"
@@ -173,7 +207,7 @@ git switch main
 git merge --squash feature/add-authorization
 git commit -m "feat: add authorization"
 git branch -d feature/add-authorization
-# Version produced on main: 1.1.0-preview.1
+# Version produced on main: 1.1.0-preview.2
 ```
 
 `release-version.sh` is optional shorthand for NBGV's release workflow. Its
@@ -274,9 +308,10 @@ present.
 ## GitHub Actions behavior
 
 - push to `main` -> CI validation always runs with base version from `dotnet nbgv get-version -v SemVer2`
-- push to `main` + preview version -> dev image and deploy to `dev` using the calculated version `X.Y.Z-preview.{height}`
+- push to `main` + `preview.1` or later -> dev image and deploy to `dev` using `X.Y.Z-preview.N.YYDDD.RUN_NUMBER`
+- push to `main` + `preview.0` -> validation only; no dev image or deployment
 - push to `main` + RC/stable version -> CI only, `dev` deployment is skipped
-- tag `vX.Y.Z-rc.N` -> staging image, deploy to `staging`, publish Release Drafter, only if tag equals NBGV version
+- tag `vX.Y.Z-rc.N` -> staging image using `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`, deploy to `staging`, publish Release Drafter, only if tag equals NBGV version
 - tag `vX.Y.Z` -> production image, deploy to `production`, publish Release Drafter, only if tag equals NBGV version
 
 The single `build-and-publish.yml` workflow invokes Release Drafter with `publish: false`
