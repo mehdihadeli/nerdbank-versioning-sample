@@ -43,6 +43,7 @@ internal sealed class VersioningSandbox : IDisposable
         );
 
         var sandbox = new VersioningSandbox(sandboxPath);
+        sandbox.InitializePreviewVersion();
 
         sandbox.Run("git", "init");
         sandbox.Run("git", "config", "user.email", "test@test.com");
@@ -277,6 +278,23 @@ internal sealed class VersioningSandbox : IDisposable
             ?? throw new InvalidOperationException("Unable to parse version.json.");
 
         document["version"] = newVersion;
+        File.WriteAllText(
+            versionFilePath,
+            document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        );
+    }
+
+    private void InitializePreviewVersion()
+    {
+        var versionFilePath = Path.Combine(_rootDirectory, "version.json");
+        var document =
+            JsonNode.Parse(File.ReadAllText(versionFilePath, Encoding.UTF8))
+            ?? throw new InvalidOperationException("Unable to parse version.json.");
+
+        document["version"] = "1.0.0-preview.{height}";
+        document["versionHeightOffset"] = -1;
+        document["versionHeightOffsetAppliesTo"] = "1.0.0-preview.{height}";
         File.WriteAllText(
             versionFilePath,
             document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
