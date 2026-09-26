@@ -78,34 +78,29 @@ internal sealed class VersioningSandbox : IDisposable
 
     public string RunReleaseVersionScript(params string[] arguments)
     {
-        var bashPath = new[]
-        {
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "Git",
-                "usr",
-                "bin",
-                "bash.exe"
-            ),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                "Git",
-                "usr",
-                "bin",
-                "bash.exe"
-            ),
-        }.FirstOrDefault(File.Exists);
-        if (bashPath is null)
-        {
-            bashPath = "bash.exe";
-        }
-
-        var dotnetPath = Run("where.exe", "dotnet")
-            .Split(
-                ['\r', '\n'],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-            )
-            .First();
+        var bashPath = FindExecutable(
+            OperatingSystem.IsWindows() ? "bash.exe" : "bash",
+            OperatingSystem.IsWindows()
+                ? new[]
+                {
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Git",
+                        "usr",
+                        "bin",
+                        "bash.exe"
+                    ),
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                        "Git",
+                        "usr",
+                        "bin",
+                        "bash.exe"
+                    ),
+                }
+                : []
+        );
+        var dotnetPath = FindExecutable(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         var dotnetDirectory =
             Path.GetDirectoryName(dotnetPath)
             ?? throw new InvalidOperationException("Unable to locate the dotnet directory.");
@@ -117,6 +112,39 @@ internal sealed class VersioningSandbox : IDisposable
             string.Join(Path.PathSeparator, dotnetDirectory, bashDirectory),
             bashPath,
             ["release-version.sh", .. arguments]
+        );
+    }
+
+    private static string FindExecutable(
+        string executableName,
+        IEnumerable<string>? preferredPaths = null
+    )
+    {
+        foreach (var preferredPath in preferredPaths ?? [])
+        {
+            if (File.Exists(preferredPath))
+            {
+                return preferredPath;
+            }
+        }
+
+        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var directory in pathVariable.Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                continue;
+            }
+
+            var executablePath = Path.Combine(directory, executableName);
+            if (File.Exists(executablePath))
+            {
+                return executablePath;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to locate '{executableName}' in the PATH environment variable."
         );
     }
 
