@@ -5,13 +5,13 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  ./release-version.sh prepare-preview <major.minor.patch>
+  ./release-version.sh prepare-train <major.minor.patch>
   ./release-version.sh prepare-rc <major.minor.patch>
   ./release-version.sh prepare-stable <major.minor.patch>
   ./release-version.sh tag
 
 Examples:
-  ./release-version.sh prepare-preview 1.0.0
+  ./release-version.sh prepare-train 1.1.0
   ./release-version.sh prepare-rc 1.0.0
   ./release-version.sh prepare-stable 1.0.0
   ./release-version.sh tag
@@ -23,55 +23,87 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
-if ! command -v nbgv >/dev/null 2>&1; then
-  echo "nbgv is required. Install it with: dotnet tool install --global nbgv" >&2
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "dotnet is required. Restore the repository tools with: dotnet tool restore" >&2
   exit 1
 fi
 
-next_prerelease_number() {
+prepare_train() {
   local base_version="$1"
-  local identifier="$2"
-  local current_version
-  local current_number
 
-  current_version="$(sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' version.json | head -n 1)"
-  current_number="$(sed -nE "s/^${base_version}-${identifier}\.([0-9]+)$/\1/p" <<< "$current_version")"
-
-  if [[ -n "$current_number" ]]; then
-    echo $((current_number + 1))
-  else
-    echo 1
-  fi
+  dotnet nbgv set-version "${base_version}-preview.{height}"
+  set_version_height_offset -1 "${base_version}-preview.{height}"
+  echo "Updated version.json to ${base_version}-preview.{height}. Commit and push this release-train change."
 }
 
-prepare_prerelease() {
+prepare_rc() {
   local base_version="$1"
-  local identifier="$2"
-  local number
 
-  number="$(next_prerelease_number "$base_version" "$identifier")"
-  nbgv set-version "${base_version}-${identifier}.${number}"
-  echo "Updated version.json to ${base_version}-${identifier}.${number}. Open a pull request with this change."
+  dotnet nbgv set-version "${base_version}-rc.{height}"
+  echo "Updated version.json to ${base_version}-rc.{height}. Commit and push this RC change."
 }
 
+prepare_stable() {
+  local base_version="$1"
+
+  dotnet nbgv set-version "$base_version"
+  clear_version_height_offset
+  echo "Updated version.json to ${base_version}. Commit and push this stable release change."
+}
+
+set_version_height_offset() {
+  local offset="$1"
+  local applies_to="$2"
+  local temporary_file
+
+  temporary_file="$(mktemp)"
+  awk -v offset="$offset" -v applies_to="$applies_to" '
+    /"versionHeightOffset":/ { next }
+    /"versionHeightOffsetAppliesTo":/ { next }
+    /"version":/ {
+      print
+      print "  \"versionHeightOffset\": " offset ","
+      print "  \"versionHeightOffsetAppliesTo\": \"" applies_to "\","
+      next
+    }
+    { print }
+  ' version.json > "$temporary_file"
+  mv "$temporary_file" version.json
+}
+
+clear_version_height_offset() {
+  local temporary_file
+
+  temporary_file="$(mktemp)"
+  awk '
+    /"versionHeightOffset":/ { next }
+    /"versionHeightOffsetAppliesTo":/ { next }
+    { print }
+  ' version.json > "$temporary_file"
+  mv "$temporary_file" version.json
+}
+
+tag_release() {
+  dotnet nbgv tag
+  echo "Created the NBGV tag. Push it with: git push origin <tag-name>"
+}
 
 case "$1" in
-  prepare-preview)
+  prepare-train)
     [[ $# -eq 2 ]] || { usage; exit 1; }
-    prepare_prerelease "$2" "preview"
+    prepare_train "$2"
     ;;
   prepare-rc)
     [[ $# -eq 2 ]] || { usage; exit 1; }
-    prepare_prerelease "$2" "rc"
+    prepare_rc "$2"
     ;;
   prepare-stable)
     [[ $# -eq 2 ]] || { usage; exit 1; }
-    nbgv set-version "$2"
-    echo "Updated version.json to $2. Open a pull request with this change."
+    prepare_stable "$2"
     ;;
   tag)
-    nbgv get-version
-    nbgv tag
+    [[ $# -eq 1 ]] || { usage; exit 1; }
+    tag_release
     ;;
   *)
     usage

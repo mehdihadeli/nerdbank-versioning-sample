@@ -7,9 +7,9 @@
 
 ## Big picture
 
-- **Local versioning path:** `version.json` + the local `nbgv` tool from `dotnet-tools.json` define explicit versions such as `1.0.0-preview.1`, with `v{version}` release tags.
+- **Local versioning path:** `version.json` + the local `nbgv` tool from `dotnet-tools.json` define commit-height versions such as `1.0.0-preview.5`, with `v{version}` release tags.
 - **CI versioning path:** `.github/workflows/build-and-publish.yml` uses the same NBGV version engine; preview merges publish the committed preview version, while RC/stable tags publish the matching release.
-- For the GitHub Flow model used here (`main` + short-lived feature/fix branches), the practical strategy is **planned next version + explicit preview number**: ordinary merges keep the version, an intentional version PR advances `preview.N`, an RC tag promotes to staging, and a clean `vX.Y.Z` tag promotes to production.
+- For the GitHub Flow model used here (`main` + short-lived feature/fix branches), the practical strategy is **planned next version + automatic commit height**: ordinary merges advance `preview.{height}`, an RC tag promotes to staging, and a clean `vX.Y.Z` tag promotes to production.
 
 ## Files that matter most
 
@@ -38,8 +38,8 @@ dotnet build ./src/versioning-samples.csproj
 ## Repo-specific conventions
 
 - Version tags in `version.json` are expected in the form `vX.Y.Z`; `main` is the public-release branch.
-- Preview builds are modeled as explicit `*-preview.N` versions locally; production releases are clean `vX.Y.Z` tags.
-- Preview numbers advance only through `release-version.sh prepare-preview`; ordinary pull requests do not change version intent.
+- Preview builds are modeled as `*-preview.{height}` versions locally; production releases are clean `vX.Y.Z` tags.
+- Preview numbers advance with Git commit height; ordinary pull requests do not require version-file edits.
 - CI writes both `nbgvSemVer` and the effective `semVer` to `publish/version.json`.
 - Local builds rely on the `Nerdbank.GitVersioning` MSBuild package to stamp the assembly; the running app reads `AssemblyInformationalVersion` at runtime when no CI-generated `version.json` file is present.
 - CI/CD overrides `Version` / `InformationalVersion` during both direct `dotnet` builds and Docker-based `dotnet publish` so the published app reports the effective CI-selected version.
@@ -49,8 +49,8 @@ dotnet build ./src/versioning-samples.csproj
 
 ## Recommended strategy for agents
 
-- Prefer **version + explicit preview counter** for this repo, e.g. `1.0.0-preview.1`, `1.0.0-preview.2`, `v1.0.0-rc.1`, then `v1.0.0`.
-- This matches the chosen GitHub Flow model here: a deliberate version PR gets the next preview number within the planned target release.
+- Prefer **version + automatic commit height** for this repo, e.g. `1.0.0-preview.{height}`, `v1.0.0-rc.1`, then `v1.0.0`.
+- This matches the chosen GitHub Flow model here: each commit within the planned target release gets a deterministic preview height.
 - If the team wants `fix:` to become `0.1.1-preview.2` and `feat:` to become `0.2.0-preview.3`, that is a **custom policy**; mainstream .NET versioning tools do not provide that exact behavior out of the box.
 - Keep one version engine across local and CI whenever possible. Mixing `nbgv` locally and GitVersion in CI makes version outcomes harder to reason about.
 

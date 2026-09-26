@@ -36,9 +36,13 @@ internal sealed class VersioningSandbox : IDisposable
             Path.Combine(sandboxPath, "dotnet-tools.json"),
             overwrite: true
         );
+        File.Copy(
+            Path.Combine(repositoryRoot, "release-version.sh"),
+            Path.Combine(sandboxPath, "release-version.sh"),
+            overwrite: true
+        );
 
         var sandbox = new VersioningSandbox(sandboxPath);
-        sandbox.SetVersionValue("1.0.0-preview.1");
 
         sandbox.Run("git", "init");
         sandbox.Run("git", "config", "user.email", "test@test.com");
@@ -72,6 +76,103 @@ internal sealed class VersioningSandbox : IDisposable
 
     public string GetSemVer2() => Run("dotnet", "nbgv", "get-version", "-v", "SemVer2");
 
+    public string RunReleaseVersionScript(params string[] arguments)
+    {
+        var bashPath = FindExecutable(
+            OperatingSystem.IsWindows() ? "bash.exe" : "bash",
+            OperatingSystem.IsWindows()
+                ? new[]
+                {
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        "Git",
+                        "usr",
+                        "bin",
+                        "bash.exe"
+                    ),
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                        "Git",
+                        "usr",
+                        "bin",
+                        "bash.exe"
+                    ),
+                }
+                : []
+        );
+        var dotnetPath = FindExecutable(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var dotnetDirectory =
+            Path.GetDirectoryName(dotnetPath)
+            ?? throw new InvalidOperationException("Unable to locate the dotnet directory.");
+        var bashDirectory =
+            Path.GetDirectoryName(bashPath)
+            ?? throw new InvalidOperationException("Unable to locate the Bash directory.");
+
+        return RunWithPath(
+            string.Join(Path.PathSeparator, dotnetDirectory, bashDirectory),
+            bashPath,
+            ["release-version.sh", .. arguments]
+        );
+    }
+
+    private static string FindExecutable(
+        string executableName,
+        IEnumerable<string>? preferredPaths = null
+    )
+    {
+        foreach (var preferredPath in preferredPaths ?? [])
+        {
+            if (File.Exists(preferredPath))
+            {
+                return preferredPath;
+            }
+        }
+
+        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (var directory in pathVariable.Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                continue;
+            }
+
+            var executablePath = Path.Combine(directory, executableName);
+            if (File.Exists(executablePath))
+            {
+                return executablePath;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Unable to locate '{executableName}' in the PATH environment variable."
+        );
+    }
+
+    public string CalculatePullRequestValidation() => GetSemVer2();
+
+    public bool WouldPublishPullRequest() => false;
+
+    public string CalculateMainPreview() => GetSemVer2();
+
+    public string CalculateSemanticVersion()
+    {
+        var version = GetSemVer2();
+        var gitCommitSuffixIndex = version.IndexOf("-g", StringComparison.Ordinal);
+        if (gitCommitSuffixIndex >= 0)
+        {
+            version = version[..gitCommitSuffixIndex];
+        }
+
+        var commitMetadataIndex = version.IndexOf(".g", StringComparison.Ordinal);
+        if (commitMetadataIndex >= 0)
+        {
+            version = version[..commitMetadataIndex];
+        }
+
+        var buildMetadataIndex = version.IndexOf('+', StringComparison.Ordinal);
+        return buildMetadataIndex < 0 ? version : version[..buildMetadataIndex];
+    }
+
     public string GetAssemblyInformationalVersion() =>
         Run("dotnet", "nbgv", "get-version", "-v", "AssemblyInformationalVersion");
 
@@ -97,6 +198,12 @@ internal sealed class VersioningSandbox : IDisposable
         Run("git", "commit", "-m", message, "--no-verify");
     }
 
+    public void CommitVersionChange(string message)
+    {
+        Run("git", "add", "version.json");
+        Run("git", "commit", "-m", message, "--no-verify");
+    }
+
     public void MergeSquashToMain(string branchName)
     {
         Checkout("main");
@@ -105,25 +212,36 @@ internal sealed class VersioningSandbox : IDisposable
         Run("git", "branch", "-D", branchName);
     }
 
-    public void PrepareStaging(string stableVersion, int rcNumber)
+    /// <summary>
+    /// Commits an RC version change using Git height before the RC tag is created.
+    /// </summary>
+    public void PrepareStaging(string stableVersion)
     {
-        var target = $"{stableVersion}-rc.{rcNumber}";
-        SetVersionValue(target);
+        var target = $"{stableVersion}-rc.{{height}}";
+        Run("dotnet", "nbgv", "set-version", target);
         Run("git", "add", "version.json");
-        Run("git", "commit", "-m", $"chore(version): set {target}", "--no-verify");
+        Run(
+            "git",
+            "commit",
+            "-m",
+            $"chore(version): set {stableVersion}-rc from height",
+            "--no-verify"
+        );
     }
 
     public void PrepareProduction(string stableVersion)
     {
         SetVersionValue(stableVersion);
+        RemoveVersionHeightOffset();
         Run("git", "add", "version.json");
         Run("git", "commit", "-m", $"chore(version): release {stableVersion}", "--no-verify");
     }
 
     public void PrepareNextPreviewTrain(string nextStableVersion)
     {
-        var target = $"{nextStableVersion}-preview.1";
+        var target = $"{nextStableVersion}-preview.{{height}}";
         SetVersionValue(target);
+        SetVersionHeightOffset(-1, $"{nextStableVersion}-preview.{{height}}");
         Run("git", "add", "version.json");
         Run("git", "commit", "-m", $"chore(version): start {nextStableVersion}", "--no-verify");
     }
@@ -132,6 +250,11 @@ internal sealed class VersioningSandbox : IDisposable
     {
         Run("git", "tag", "-a", tagName, "-m", message ?? $"Release {tagName}");
     }
+
+    /// <summary>
+    /// Creates an NBGV tag for the version committed at the current HEAD.
+    /// </summary>
+    public void CreateNbgvTag() => Run("dotnet", "nbgv", "tag");
 
     public string? GetTagPointingAtHead(string pattern)
     {
@@ -161,9 +284,47 @@ internal sealed class VersioningSandbox : IDisposable
         );
     }
 
+    private void SetVersionHeightOffset(int offset, string appliesTo)
+    {
+        var versionFilePath = Path.Combine(_rootDirectory, "version.json");
+        var document =
+            JsonNode.Parse(File.ReadAllText(versionFilePath, Encoding.UTF8))
+            ?? throw new InvalidOperationException("Unable to parse version.json.");
+
+        document["versionHeightOffset"] = offset;
+        document["versionHeightOffsetAppliesTo"] = appliesTo;
+        File.WriteAllText(
+            versionFilePath,
+            document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        );
+    }
+
+    private void RemoveVersionHeightOffset()
+    {
+        var versionFilePath = Path.Combine(_rootDirectory, "version.json");
+        var document =
+            JsonNode.Parse(File.ReadAllText(versionFilePath, Encoding.UTF8))
+            ?? throw new InvalidOperationException("Unable to parse version.json.");
+
+        var versionObject = document.AsObject();
+        versionObject.Remove("versionHeightOffset", out _);
+        versionObject.Remove("versionHeightOffsetAppliesTo", out _);
+        File.WriteAllText(
+            versionFilePath,
+            document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        );
+    }
+
     private string Run(string fileName, params string[] arguments)
     {
-        var (exitCode, standardOutput, standardError) = RunProcess(fileName, arguments);
+        return RunWithPath(null, fileName, arguments);
+    }
+
+    private string RunWithPath(string? pathPrefix, string fileName, params string[] arguments)
+    {
+        var (exitCode, standardOutput, standardError) = RunProcess(fileName, arguments, pathPrefix);
         if (exitCode != 0)
         {
             throw new InvalidOperationException(
@@ -182,7 +343,8 @@ internal sealed class VersioningSandbox : IDisposable
 
     private (int ExitCode, string StandardOutput, string StandardError) RunProcess(
         string fileName,
-        params string[] arguments
+        string[] arguments,
+        string? pathPrefix = null
     )
     {
         using var process = new Process();
@@ -195,6 +357,12 @@ internal sealed class VersioningSandbox : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        if (pathPrefix is not null)
+        {
+            process.StartInfo.Environment["PATH"] =
+                pathPrefix + Path.PathSeparator + process.StartInfo.Environment["PATH"];
+        }
 
         foreach (var argument in arguments)
         {

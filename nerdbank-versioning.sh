@@ -4,28 +4,28 @@
 #
 # Test summary and expected results:
 # 1. Initial main build
-#    - Local nbgv:    1.0.0-preview.1
+#    - Local nbgv:    1.0.0-preview.1.g<commit>
 # 2. Feature branch squash-merged to main
-#    - Local nbgv:    1.0.0-preview.1 (unchanged)
+#    - Local nbgv:    1.0.0-preview.2.g<commit>
 # 3. Fix branch squash-merged to main
-#    - Local nbgv:    1.0.0-preview.1 (unchanged)
+#    - Local nbgv:    1.0.0-preview.3.g<commit>
 # 4. RC promotion tag on main
 #    - Tag:           v1.0.0-rc.1
-#    - Local nbgv:    1.0.0-preview.3
+#    - Local nbgv:    1.0.0-preview.3.g<commit>
 #    - Effective env: 1.0.0-rc.1
 # 5. Bug fix after RC on main
-#    - Local nbgv:    1.0.0-preview.1 (unchanged)
+#    - Local nbgv:    1.0.0-preview.4.g<commit>
 # 6. RC repromotion tag on main
 #    - Tag:           v1.0.0-rc.2
-#    - Local nbgv:    1.0.0-preview.4
+#    - Local nbgv:    1.0.0-preview.4.g<commit>
 #    - Effective env: 1.0.0-rc.2
 # 7. Production promotion tag on main
 #    - Tag:           v1.0.0
-#    - Local nbgv:    1.0.0-preview.4
+#    - Local nbgv:    1.0.0-preview.4.g<commit>
 #    - Effective env: 1.0.0
-# 8. Next release train starts
-#    - version.json:  1.1.0-preview.1
-#    - Local nbgv:    1.1.0-preview.1
+# 8. Next release train starts with a new base version; height resets automatically
+#    - version.json:  1.1.0-preview.{height}
+#    - Local nbgv:    1.1.0-preview.1.g<commit>
 #
 # Notes:
 # - This script uses a disposable sandbox repo, not the workspace Git history.
@@ -171,24 +171,14 @@ tag_head() {
     info "Tagged HEAD with $tag_name"
 }
 
-bump_declared_version() {
-    local old_version="$1"
-    local new_version="$2"
-
-    run_in_repo sed -i.bak "s/\"version\": \"$old_version\"/\"version\": \"$new_version\"/" version.json
-    run_in_repo rm -f version.json.bak
-    info "Bumped: $old_version → $new_version"
-}
-
-next_minor_stable() {
+set_release_train() {
     local stable="$1"
-    local major minor patch
+    local old_version
 
-    IFS='.' read -r major minor patch <<EOF
-$stable
-EOF
-
-    echo "${major}.$((minor + 1)).0"
+    old_version=$(get_declared_version)
+    run_in_repo sed -i.bak "s/\"version\": \"$old_version\"/\"version\": \"${stable}-preview.{height}\"/" version.json
+    run_in_repo rm -f version.json.bak
+    info "Started release train: ${stable}-preview.{height}"
 }
 
 setup() {
@@ -216,13 +206,13 @@ setup() {
     info "Sandbox: $SANDBOX"
     info "Declared version: $(get_declared_version)"
     info "Stable target: $(get_stable_version)"
-    info "Starting explicit preview: $(get_declared_version)"
+    info "Starting height-based preview: $(get_declared_version)"
     ok "Setup complete"
 }
 
 check_dev() {
     local description="$1"
-    local expected_semver="$2"
+    local expected_prefix="$2"
     local actual_semver
     local effective_version
 
@@ -231,10 +221,10 @@ check_dev() {
     actual_semver=$(get_semver)
     effective_version=$(get_effective_version)
 
-    print_versions "$actual_semver" "$expected_semver" "$effective_version" "$expected_semver"
+    print_versions "$actual_semver" "${expected_prefix}.<height>[.g<commit>]" "$effective_version" "$actual_semver"
 
-    assert_equals "nbgv preview version" "$actual_semver" "$expected_semver"
-    assert_equals "effective dev version" "$effective_version" "$expected_semver"
+    assert_contains "nbgv preview prefix" "$actual_semver" "${expected_prefix}."
+    assert_equals "effective dev version" "$effective_version" "$actual_semver"
 }
 
 check_staging() {
@@ -280,32 +270,30 @@ check_prod() {
 test_all() {
     local stable
     local next_stable
-    local old_declared
-    local next_declared
     local current_preview
     local post_rc_preview
 
     stable=$(get_stable_version)
 
     header "VERSIONING TESTS"
-    info "DEV uses an explicit preview.N; ordinary merges keep the committed version"
-    info "DEV artifact metadata can include commit traceability without changing SemVer"
+    info "DEV derives preview height from Git commits; each merge gets a unique preview"
+    info "DEV artifact metadata includes commit traceability"
     info "STAGING and PROD are promoted by git tags; RC bug fixes stay on the same release train and repromote as rc.N"
 
-    check_dev "1. Initial main build" "${stable}-preview.1"
+    check_dev "1. Initial main build" "${stable}-preview"
 
     header "2. Feature branch merge"
     run_in_repo git checkout -b feat/login >/dev/null
     commit_change "feat(auth): add authentication"
     merge_branch "feat/login"
-    check_dev "After feature merge" "${stable}-preview.1"
+    check_dev "After feature merge" "${stable}-preview"
 
     header "3. Fix branch merge"
     run_in_repo git checkout -b fix/login-bug >/dev/null
     commit_change "fix(auth): resolve token issue"
     merge_branch "fix/login-bug"
-    current_preview="${stable}-preview.1"
-    check_dev "After fix merge" "$current_preview"
+    current_preview=$(get_semver)
+    check_dev "After fix merge" "${stable}-preview"
 
     header "4. RC promotion"
     tag_head "v${stable}-rc.1" "Release candidate"
@@ -315,8 +303,8 @@ test_all() {
     run_in_repo git checkout -b fix/rc-bug >/dev/null
     commit_change "fix(auth): resolve release candidate regression"
     merge_branch "fix/rc-bug"
-    post_rc_preview="${stable}-preview.1"
-    check_dev "After RC bug fix merge" "$post_rc_preview"
+    post_rc_preview=$(get_semver)
+    check_dev "After RC bug fix merge" "${stable}-preview"
 
     header "6. RC repromotion"
     tag_head "v${stable}-rc.2" "Release candidate 2"
@@ -327,13 +315,11 @@ test_all() {
     check_prod "After production tag" "$post_rc_preview" "$stable"
 
     header "8. Next release train"
-    old_declared=$(get_declared_version)
-    next_stable=$(next_minor_stable "$stable")
-    next_declared="${next_stable}-preview.1"
-    bump_declared_version "$old_declared" "$next_declared"
+    next_stable="${stable%.*}.$(( ${stable##*.} + 1 ))"
+    set_release_train "$next_stable"
     run_in_repo git add version.json
     run_in_repo git commit -m "chore: start ${next_stable}" --no-verify >/dev/null
-    check_dev "After starting next train" "${next_stable}-preview.1"
+    check_dev "After starting next train" "${next_stable}-preview"
 }
 
 summary() {
@@ -342,12 +328,12 @@ summary() {
     echo -e "  ${RED}Failed: $FAILED${NC}\n"
     echo -e "  ${BOLD}Scenario summary:${NC}"
     echo -e "  ${BLUE}1.${NC} main init            -> 1.0.0-preview.1 -> dev 1.0.0-preview.1"
-    echo -e "  ${BLUE}2.${NC} feature squash merge -> 1.0.0-preview.1 -> dev 1.0.0-preview.1"
-    echo -e "  ${BLUE}3.${NC} fix squash merge     -> 1.0.0-preview.1 -> dev 1.0.0-preview.1"
-    echo -e "  ${BLUE}4.${NC} rc tag               -> nbgv 1.0.0-preview.1 -> staging 1.0.0-rc.1"
-    echo -e "  ${BLUE}5.${NC} post-rc bug fix      -> 1.0.0-preview.1 -> dev 1.0.0-preview.1"
-    echo -e "  ${BLUE}6.${NC} rc retag             -> nbgv 1.0.0-preview.1 -> staging 1.0.0-rc.2"
-    echo -e "  ${BLUE}7.${NC} stable tag           -> nbgv 1.0.0-preview.1 -> prod 1.0.0"
+    echo -e "  ${BLUE}2.${NC} feature squash merge -> 1.0.0-preview.2 -> dev 1.0.0-preview.2"
+    echo -e "  ${BLUE}3.${NC} fix squash merge     -> 1.0.0-preview.3 -> dev 1.0.0-preview.3"
+    echo -e "  ${BLUE}4.${NC} rc tag               -> nbgv preview height -> staging 1.0.0-rc.1"
+    echo -e "  ${BLUE}5.${NC} post-rc bug fix      -> 1.0.0-preview.4 -> dev 1.0.0-preview.4"
+    echo -e "  ${BLUE}6.${NC} rc retag             -> nbgv preview height -> staging 1.0.0-rc.2"
+    echo -e "  ${BLUE}7.${NC} stable tag           -> nbgv preview height -> prod 1.0.0"
     echo -e "  ${BLUE}8.${NC} next train           -> 1.1.0-preview.1 -> dev 1.1.0-preview.1\n"
 
     if [ "$FAILED" -eq 0 ]; then
