@@ -78,14 +78,15 @@ jobs:
           set -euo pipefail
           nbgv="$RUNNER_TEMP/nbgv/nbgv"
           dotnet tool install --tool-path "$RUNNER_TEMP/nbgv" nbgv --version 3.10.94
-          version="$($nbgv get-version -v SemVer2)"
+          nbgv_version="$($nbgv get-version -v SemVer2)"
+          version="$nbgv_version"
           assembly_version="$($nbgv get-version -v AssemblyVersion)"
           commit="$(git rev-parse --short HEAD)"
 
           if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            expected_ref="refs/tags/v${version}"
-            if [[ "${GITHUB_REF}" != "${expected_ref}" ]]; then
-              echo "Tag ${GITHUB_REF} does not match NBGV version ${version}."
+            version="${GITHUB_REF_NAME#v}"
+            if [[ "${version}" != "${nbgv_version}" ]]; then
+              echo "Release tag ${version} does not match NBGV version ${nbgv_version}."
               exit 1
             fi
             if [[ "${version}" == *-rc.* ]]; then
@@ -93,12 +94,15 @@ jobs:
             else
               environment="production"
             fi
-          else
-            if [[ "${version}" != *-preview.* ]]; then
-              echo "A main build must use an explicit -preview.N version; got ${version}."
-              exit 1
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            if [[ "${version}" == *-preview.* ]]; then
+              environment="dev"
+            else
+              environment="none"
             fi
-            environment="dev"
+          else
+            echo "Unsupported release tag: ${GITHUB_REF_NAME}."
+            exit 1
           fi
 
           informational_version="${version}+${commit}"
