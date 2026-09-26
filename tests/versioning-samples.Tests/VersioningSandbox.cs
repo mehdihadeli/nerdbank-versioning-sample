@@ -241,7 +241,7 @@ internal sealed class VersioningSandbox : IDisposable
     {
         var target = $"{nextStableVersion}-preview.{{height}}";
         SetVersionValue(target);
-        SetVersionHeightOffset(-1, $"{nextStableVersion}-preview.{{height}}");
+        RemoveVersionHeightOffset();
         Run("git", "add", "version.json");
         Run("git", "commit", "-m", $"chore(version): start {nextStableVersion}", "--no-verify");
     }
@@ -277,22 +277,6 @@ internal sealed class VersioningSandbox : IDisposable
             ?? throw new InvalidOperationException("Unable to parse version.json.");
 
         document["version"] = newVersion;
-        File.WriteAllText(
-            versionFilePath,
-            document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
-        );
-    }
-
-    private void SetVersionHeightOffset(int offset, string appliesTo)
-    {
-        var versionFilePath = Path.Combine(_rootDirectory, "version.json");
-        var document =
-            JsonNode.Parse(File.ReadAllText(versionFilePath, Encoding.UTF8))
-            ?? throw new InvalidOperationException("Unable to parse version.json.");
-
-        document["versionHeightOffset"] = offset;
-        document["versionHeightOffsetAppliesTo"] = appliesTo;
         File.WriteAllText(
             versionFilePath,
             document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),

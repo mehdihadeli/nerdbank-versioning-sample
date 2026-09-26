@@ -90,13 +90,28 @@ jobs:
               exit 1
             fi
             if [[ "${version}" == *-rc.* ]]; then
+              date_part="$(date -u +%y%j)"
+              revision="${GITHUB_RUN_NUMBER}"
+              version="${version}.${date_part}.${revision}"
               environment="staging"
             else
               environment="production"
             fi
           elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            if [[ "${version}" == *-preview.* ]]; then
-              environment="dev"
+            if [[ "${nbgv_version}" == *-preview.* ]]; then
+              if [[ "${nbgv_version}" =~ -preview\.0(\.|$) ]]; then
+                environment="none"
+              else
+                if [[ ! "${nbgv_version}" =~ ^([0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+) ]]; then
+                  echo "Unable to parse NBGV preview version: ${nbgv_version}."
+                  exit 1
+                fi
+
+                date_part="$(date -u +%y%j)"
+                revision="${GITHUB_RUN_NUMBER}"
+                version="${BASH_REMATCH[1]}.${date_part}.${revision}"
+                environment="dev"
+              fi
             else
               environment="none"
             fi
@@ -124,7 +139,7 @@ jobs:
 
   publish:
     name: Publish container and release
-    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(needs['calculate-version'].outputs.version, '-preview.'))
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(needs['calculate-version'].outputs.version, '-preview.') && !contains(needs['calculate-version'].outputs.version, '-preview.0'))
     needs:
       - build-test
       - calculate-version

@@ -32,7 +32,7 @@ prepare_train() {
   local base_version="$1"
 
   dotnet nbgv set-version "${base_version}-preview.{height}"
-  set_version_height_offset -1 "${base_version}-preview.{height}"
+  clear_version_height_offset
   echo "Updated version.json to ${base_version}-preview.{height}. Commit and push this release-train change."
 }
 
@@ -49,26 +49,6 @@ prepare_stable() {
   dotnet nbgv set-version "$base_version"
   clear_version_height_offset
   echo "Updated version.json to ${base_version}. Commit and push this stable release change."
-}
-
-set_version_height_offset() {
-  local offset="$1"
-  local applies_to="$2"
-  local temporary_file
-
-  temporary_file="$(mktemp)"
-  awk -v offset="$offset" -v applies_to="$applies_to" '
-    /"versionHeightOffset":/ { next }
-    /"versionHeightOffsetAppliesTo":/ { next }
-    /"version":/ {
-      print
-      print "  \"versionHeightOffset\": " offset ","
-      print "  \"versionHeightOffsetAppliesTo\": \"" applies_to "\","
-      next
-    }
-    { print }
-  ' version.json > "$temporary_file"
-  mv "$temporary_file" version.json
 }
 
 clear_version_height_offset() {

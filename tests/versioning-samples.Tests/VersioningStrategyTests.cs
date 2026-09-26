@@ -8,6 +8,7 @@ public sealed class VersioningStrategyTests
     public void Customer_export_authentication_and_release_tags_follow_version_scenario()
     {
         using var sandbox = VersioningSandbox.Create();
+        Assert.Equal("1.0.0-preview.0", sandbox.CalculateSemanticVersion());
 
         sandbox.CreateBranch("feature/customer-export");
         sandbox.CommitChange("feat: add customer export");
@@ -50,18 +51,19 @@ public sealed class VersioningStrategyTests
         sandbox.CreateBranch("chore/prepare-1.1.0-preview");
         sandbox.PrepareNextPreviewTrain("1.1.0");
         sandbox.MergeSquashToMain("chore/prepare-1.1.0-preview");
+        Assert.Equal("1.1.0-preview.1", sandbox.CalculateSemanticVersion());
         sandbox.CreateBranch("feature/add-authorization");
         sandbox.CommitChange("feat: add authorization");
         sandbox.MergeSquashToMain("feature/add-authorization");
         var nextPreview = sandbox.CalculateSemanticVersion();
-        Assert.Equal("1.1.0-preview.1", nextPreview);
+        Assert.Equal("1.1.0-preview.2", nextPreview);
         AssertPreview(nextPreview);
 
         sandbox.CreateBranch("feature/add-reporting");
         sandbox.CommitChange("feat: add reporting");
         sandbox.MergeSquashToMain("feature/add-reporting");
         var nextPreviewTwo = sandbox.CalculateSemanticVersion();
-        Assert.Equal("1.1.0-preview.2", nextPreviewTwo);
+        Assert.Equal("1.1.0-preview.3", nextPreviewTwo);
         Assert.NotEqual(nextPreview, nextPreviewTwo);
     }
 
@@ -69,6 +71,7 @@ public sealed class VersioningStrategyTests
     public void Manual_tag_does_not_override_version_calculated_from_version_json()
     {
         using var sandbox = VersioningSandbox.Create();
+        Assert.Equal("1.0.0-preview.0", sandbox.CalculateSemanticVersion());
 
         sandbox.CreateBranch("feature/customer-export");
         sandbox.CommitChange("feat: add customer export");
@@ -83,6 +86,7 @@ public sealed class VersioningStrategyTests
     public void Customer_export_authentication_and_release_tags_follow_helper_scenario()
     {
         using var sandbox = VersioningSandbox.Create();
+        Assert.Equal("1.0.0-preview.0", sandbox.CalculateSemanticVersion());
 
         sandbox.CreateBranch("feature/customer-export");
         sandbox.CommitChange("feat: add customer export");
@@ -121,16 +125,17 @@ public sealed class VersioningStrategyTests
         sandbox.RunReleaseVersionScript("prepare-train", "1.1.0");
         sandbox.CommitVersionChange("chore: start 1.1.0 preview train");
         sandbox.MergeSquashToMain("chore/prepare-1.1.0-preview");
+        Assert.Equal("1.1.0-preview.1", sandbox.CalculateSemanticVersion());
 
         sandbox.CreateBranch("feature/add-authorization");
         sandbox.CommitChange("feat: add authorization");
         sandbox.MergeSquashToMain("feature/add-authorization");
-        Assert.Equal("1.1.0-preview.1", sandbox.CalculateSemanticVersion());
+        Assert.Equal("1.1.0-preview.2", sandbox.CalculateSemanticVersion());
 
         sandbox.CreateBranch("feature/add-reporting");
         sandbox.CommitChange("feat: add reporting");
         sandbox.MergeSquashToMain("feature/add-reporting");
-        Assert.Equal("1.1.0-preview.2", sandbox.CalculateSemanticVersion());
+        Assert.Equal("1.1.0-preview.3", sandbox.CalculateSemanticVersion());
     }
 
     private static void AssertPreview(string version)
