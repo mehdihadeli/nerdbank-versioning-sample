@@ -77,25 +77,34 @@ categories:
   - title: 🚩 Other changes
     ## putting no labels pr to `Other Changes` category with no label - https://github.com/release-drafter/release-drafter/issues/139#issuecomment-480473934
 
-exclude-labels:
-  - skip-changelog
+  - title: Excluded changes
+    type: pre-exclude
+    when:
+      label: skip-changelog
 
-version-resolver:
-  major:
-    labels:
-      - breaking-changes
-      - major
-  minor:
-    labels:
-      - minor
-  patch:
-    labels:
-      - patch
-  default: patch
+  - title: Major version changes
+    type: version-resolver
+    semver-increment: major
+    when:
+      labels:
+        - breaking-changes
+        - major
+  - title: Minor version changes
+    type: version-resolver
+    semver-increment: minor
+    when:
+      label: minor
+  - title: Patch version changes
+    type: version-resolver
+    semver-increment: patch
+    when:
+      label: patch
+  - title: Default patch version
+    type: version-resolver
+    semver-increment: patch
 
 # https://www.trywilco.com/post/wilco-ci-cd-github-heroku
 # https://github.com/release-drafter/release-drafter#autolabeler
-# https://github.com/fuxingloh/multi-labeler
 # Using regex for defining rules - https://regexr.com/
 # https://stackoverflow.com/questions/58899999/regexp-to-match-conventional-commit-syntax
 # Note: because of escaping logic inside of release drafter our regex should be escaped correctly and drafter wil un-escape it internally
