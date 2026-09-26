@@ -1,10 +1,9 @@
 {
-  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/master/src/Nerdbank.GitVersioning.Schema/version.schema.json",
-  "version": "1.0.0-preview.{height}",
+  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "1.0.0-rc.{height}",
   "versionHeightOffset": -1,
   "versionHeightOffsetAppliesTo": "1.0.0-preview.{height}",
-  "publicReleaseRefSpec": ["^refs/tags/v{version}$"],
-  "cloudBuild": {
-    "setVersionVariables": true
-  }
+  "publicReleaseRefSpec": [
+    "^refs/tags/v{version}$"
+  ]
 }
