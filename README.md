@@ -78,7 +78,8 @@ change `versionHeightOffset` to `0`. The sequence then becomes
 infer a new version from an arbitrary tag. `nbgv get-version` still calculates
 from `version.json` and Git height. Therefore, change the version template to
 `X.Y.Z-rc.{height}` before RC tags and to `X.Y.Z` before a stable tag. CI
-compares each release tag with NBGV's calculated version and rejects a mismatch.
+compares each release tag with NBGV's calculated base version, ignoring only
+the non-public `.g<commit>` suffix when it is present, and rejects a mismatch.
 
 ## Release scenario
 
@@ -311,14 +312,16 @@ present.
 - push to `main` + `preview.1` or later -> dev image and deploy to `dev` using `X.Y.Z-preview.N.YYDDD.RUN_NUMBER`
 - push to `main` + `preview.0` -> validation only; no dev image or deployment
 - push to `main` + RC/stable version -> CI only, `dev` deployment is skipped
-- tag `vX.Y.Z-rc.N` -> staging image using `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`, deploy to `staging`, publish Release Drafter, only if tag equals NBGV version
-- tag `vX.Y.Z` -> production image, deploy to `production`, publish Release Drafter, only if tag equals NBGV version
+- tag `vX.Y.Z-rc.N` -> staging image using `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`, deploy to `staging`, publish Release Drafter, only if tag matches NBGV's base version
+- tag `vX.Y.Z` -> production image, deploy to `production`, publish Release Drafter, only if tag matches NBGV's base version
 
 The single `build-and-publish.yml` workflow invokes Release Drafter with `publish: false`
 for preview pushes and `publish: true` for RC/stable tags. Its
 `if: always()` step preserves the draft even when image publication or another
 release step fails; the workflow still fails and must be fixed and rerun.
 
-This keeps one version engine across environments: local and CI always agree on the semantic version.
+This keeps one version engine across environments: local and CI agree on the
+NBGV base version, while CI adds the date and workflow revision to published
+preview and RC artifact versions.
 
 The workflow pushes images to GitHub Container Registry using tags for both the environment and the calculated semantic version.
