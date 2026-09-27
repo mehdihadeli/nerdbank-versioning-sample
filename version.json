@@ -3,7 +3,5 @@
   "version": "1.0.0-rc.{height}",
   "versionHeightOffset": -1,
   "versionHeightOffsetAppliesTo": "1.0.0-preview.{height}",
-  "publicReleaseRefSpec": [
-    "^refs/tags/v{version}$"
-  ]
+  "publicReleaseRefSpec": ["^refs/tags/v\\d+\\.\\d+\\.\\d+(?:-rc\\.\\d+)?$"]
 }
