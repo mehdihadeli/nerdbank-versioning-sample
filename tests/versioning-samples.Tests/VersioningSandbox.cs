@@ -174,6 +174,25 @@ internal sealed class VersioningSandbox : IDisposable
         return buildMetadataIndex < 0 ? version : version[..buildMetadataIndex];
     }
 
+    public string CalculateSemanticVersionWithNbgv()
+    {
+        var version = GetSemVer2();
+        var gitCommitSuffixIndex = version.IndexOf("-g", StringComparison.Ordinal);
+        if (gitCommitSuffixIndex >= 0)
+        {
+            version = version[..gitCommitSuffixIndex];
+        }
+
+        var commitMetadataIndex = version.IndexOf(".g", StringComparison.Ordinal);
+        if (commitMetadataIndex >= 0)
+        {
+            version = version[..commitMetadataIndex];
+        }
+
+        var buildMetadataIndex = version.IndexOf('+', StringComparison.Ordinal);
+        return buildMetadataIndex < 0 ? version : version[..buildMetadataIndex];
+    }
+
     public string GetAssemblyInformationalVersion() =>
         Run("dotnet", "nbgv", "get-version", "-v", "AssemblyInformationalVersion");
 
