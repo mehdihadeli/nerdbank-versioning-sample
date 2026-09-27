@@ -275,12 +275,13 @@ come from Git commit height, and RC/stable releases use `vX.Y.Z-rc.N` or
 
 ## Verify the sample strategy
 
-The repository includes a disposable Git-history simulator that validates NBGV
-behavior for the preview → RC → stable flow. Preview numbers advance through
-Git commit height, not explicit version PRs:
+The repository includes end-to-end scenario tests that create disposable Git
+repositories and validate both direct NBGV commands and the supported
+`release-version.sh` workflow. Preview numbers advance through Git commit
+height, not explicit version PRs:
 
 ```bash
-./nerdbank-versioning.sh
+dotnet test ./tests/versioning-samples.Tests/versioning-samples.Tests.csproj --configuration Release
 ```
 
 ## Docker build with CI-style version injection

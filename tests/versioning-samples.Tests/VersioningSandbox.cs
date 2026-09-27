@@ -188,6 +188,46 @@ internal sealed class VersioningSandbox : IDisposable
 
     public void Checkout(string branchName) => Run("git", "checkout", branchName);
 
+    public void MergePullRequest(string branchName, string message)
+    {
+        if (Run("git", "branch", "--show-current") != branchName)
+        {
+            CreateBranch(branchName);
+        }
+
+        CommitChange(message);
+        MergeSquashToMain(branchName);
+    }
+
+    public void PrepareVersion(string branchName, string command, string version)
+    {
+        CreateBranch(branchName);
+        RunReleaseVersionScript(command, version);
+    }
+
+    public void PrepareVersionWithNbgv(
+        string branchName,
+        string version,
+        bool removeVersionHeightOffset = false
+    )
+    {
+        CreateBranch(branchName);
+        Run("dotnet", "nbgv", "set-version", version);
+        if (removeVersionHeightOffset)
+        {
+            RemoveVersionHeightOffset();
+        }
+    }
+
+    public void PreparePreviewTrain(string branchName, string version) =>
+        PrepareVersion(branchName, "prepare-train", version);
+
+    public void PrepareReleaseCandidate(string branchName, string version) =>
+        PrepareVersion(branchName, "prepare-rc", version);
+
+    public void PrepareStableRelease(string branchName, string version) =>
+        PrepareVersion(branchName, "prepare-stable", version);
+
     public void CommitChange(string message)
     {
         File.AppendAllText(
@@ -195,7 +235,7 @@ internal sealed class VersioningSandbox : IDisposable
             $"{message} - {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}\n",
             Encoding.UTF8
         );
-        Run("git", "add", "changes.txt");
+        Run("git", "add", "changes.txt", "version.json");
         Run("git", "commit", "-m", message, "--no-verify");
     }
 
@@ -252,6 +292,8 @@ internal sealed class VersioningSandbox : IDisposable
         Run("git", "tag", "-a", tagName, "-m", message ?? $"Release {tagName}");
     }
 
+    public void Tag(string tagName) => CreateTag(tagName);
+
     /// <summary>
     /// Creates an NBGV tag for the version committed at the current HEAD.
     /// </summary>
@@ -269,6 +311,13 @@ internal sealed class VersioningSandbox : IDisposable
             System.Text.RegularExpressions.Regex.IsMatch(tag, pattern)
         );
     }
+
+    public string[] TagsAtHead() =>
+        Run("git", "tag", "--points-at", "HEAD")
+            .Split(
+                ['\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
 
     private void SetVersionValue(string newVersion)
     {

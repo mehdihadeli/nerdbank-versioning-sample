@@ -3,7 +3,7 @@
 ## What this repo is
 
 - This repository is a **versioning sample**, not a feature-rich application. The app is now a minimal ASP.NET Core web app with a root page and a `/version` endpoint.
-- The important behavior lives in `version.json`, `dotnet-tools.json`, `nerdbank-versioning.sh`, `Dockerfile`, and `.github/workflows/build-and-publish.yml`.
+- The important behavior lives in `version.json`, `dotnet-tools.json`, `release-version.sh`, `Dockerfile`, and `.github/workflows/build-and-publish.yml`.
 
 ## Big picture
 
@@ -16,7 +16,7 @@
 - `version.json` (repo root): canonical local version rules. Read this first for tag patterns, preview/release behavior, and cloud-build variables.
 - `.github/workflows/build-and-publish.yml`: release pipeline example; also shows how deployment environment is inferred from refs/tags.
 - `Dockerfile`: accepts CI-calculated version build args, passes them to `dotnet publish`, and exposes the calculated runtime version metadata through container environment variables.
-- `dotnet-tools.json` (repo root) + `nerdbank-versioning.sh`: local tool restore plus a disposable Git history simulator for preview/RC/prod scenarios.
+- `dotnet-tools.json` (repo root) + `release-version.sh`: local tool restore plus the supported release helper for preview/RC/stable preparation and tagging.
 - `Program.cs` + `VersionInfoProvider.cs`: minimal web host plus the `/version` endpoint; runtime version display prefers a sibling `version.json` file and falls back to assembly metadata stamped by `Nerdbank.GitVersioning`.
 - `tests/versioning-samples.Tests`: smoke test coverage for the `/version` endpoint.
 - `versioning-samples.csproj`: minimal ASP.NET Core project targeting `net10.0`; the only package reference is `Nerdbank.GitVersioning` for assembly/version stamping.
@@ -63,8 +63,8 @@ dotnet build ./src/versioning-samples.csproj
 
 ## Important caveats for agents
 
-- The script `nerdbank-versioning.sh` is the practical versioning oracle in this repo: it builds a disposable Git repo, validates that ordinary merges preserve the explicit preview version, then checks RC/stable tag promotion behavior.
-- There are no unit tests in this repo. For code changes, the practical validation path is `dotnet build`, and for versioning changes, restore tools and run `dotnet nbgv ...` inside a Git repo.
+- The versioning scenario tests are the practical versioning oracle in this repo: they build disposable Git repos and validate direct NBGV and `release-version.sh` workflows.
+- For code changes, the practical validation path is `dotnet build` and `dotnet test`; for versioning changes, run the focused scenario tests.
 - RC/staging behavior is still tag-driven in CI/workflow logic; local `nbgv` output remains on the preview train unless you explicitly stabilize `version.json`.
 
 ## Change guidance
