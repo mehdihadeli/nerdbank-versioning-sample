@@ -17,8 +17,10 @@ The best practice for this sample is: **`version.json` is the source of truth, a
 
 - `dev`: push/merge to `main` producing `X.Y.Z-preview.1.YYDDD.RUN_NUMBER` or later
 - validation only: the initial repository setup calculates `1.0.0-preview.0` but is not published
-- `staging`: push tag `vX.Y.Z-rc.N` only after `version.json` on `main` is `X.Y.Z-rc.{height}`; publish `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`
-- `production`: push tag `vX.Y.Z` only after `version.json` on `main` is `X.Y.Z`
+- validation only: an RC preparation merge may report `X.Y.Z-rc.N.g<commit>` while `version.json` on `main` is `X.Y.Z-rc.{height}`
+- `staging`: push tag `vX.Y.Z-rc.N` from that validated `main` commit; publish `X.Y.Z-rc.N.YYDDD.RUN_NUMBER`
+- validation only: a stable preparation merge may report `X.Y.Z.g<commit>` while `version.json` on `main` is `X.Y.Z`
+- `production`: push tag `vX.Y.Z` from that validated `main` commit; publish clean `X.Y.Z`
 
 The CI workflow uses one publish path. It publishes preview packages and
 containers from `main` starting at `preview.1`; the train-start commit at
@@ -56,8 +58,11 @@ release train, such as `1.0.0-preview.{height}` to `1.1.0-preview.{height}`.
 The initial preview configuration scopes its `-1` height offset to
 `1.0.0-preview.{height}`. When the RC train changes the version to
 `1.0.0-rc.{height}`, that preview-only offset no longer applies. The RC train
-commit therefore becomes `1.0.0-rc.1`, and the first RC-fix commit becomes
-`1.0.0-rc.2`.
+commit therefore has base version `1.0.0-rc.1` and may report
+`1.0.0-rc.1.g<commit>` before its public tag exists. The first RC-fix commit
+similarly has base version `1.0.0-rc.2`. The matching `v1.0.0-rc.N` tag
+removes that non-public suffix for release validation, while CI publishes
+`1.0.0-rc.N.YYDDD.RUN_NUMBER` to staging.
 
 The `-1` value is intentional: it reserves the first calculated height for the
 initial repository setup commit. NBGV reports that commit as
@@ -135,10 +140,10 @@ git merge --squash chore/prepare-1.0.0-rc
 git commit -m "chore: prepare 1.0.0 RC train"
 git branch -d chore/prepare-1.0.0-rc
 version="$(dotnet nbgv get-version -v SemVer2)"
-# Version produced on main: 1.0.0-rc.1
+# Version produced on main: 1.0.0-rc.1.g<commit> (validation only)
 dotnet nbgv tag
-git push origin "v$version"
-# Tag created and pushed: v1.0.0-rc.1
+git push origin v1.0.0-rc.1
+# Tag created and pushed: v1.0.0-rc.1; CI publishes the suffixed staging artifact
 
 # Helper equivalent: run this on the release-preparation branch instead of the
 # NBGV set-version command above.
@@ -146,7 +151,7 @@ git push origin "v$version"
 # git add version.json && git commit -m "chore: prepare 1.0.0 RC train"
 # version="$(dotnet nbgv get-version -v SemVer2)"
 # ./release-version.sh tag
-# git push origin "v$version"
+# git push origin v1.0.0-rc.1
 
 # RC fix: merge to main produces 1.0.0-rc.2.
 git switch -c fix/release-candidate
@@ -156,17 +161,17 @@ git switch main
 git merge --squash fix/release-candidate
 git commit -m "fix: correct release candidate behavior"
 git branch -d fix/release-candidate
-# Version produced on main: 1.0.0-rc.2
+# Version produced on main: 1.0.0-rc.2.g<commit> (validation only)
 version="$(dotnet nbgv get-version -v SemVer2)"
 dotnet nbgv tag
-git push origin "v$version"
-# Tag created and pushed: v1.0.0-rc.2
+git push origin v1.0.0-rc.2
+# Tag created and pushed: v1.0.0-rc.2; CI publishes the suffixed staging artifact
 
 # Helper equivalent: no prepare-rc command is needed for later RCs.
 # ./release-version.sh tag
-# git push origin "v$version"
+# git push origin v1.0.0-rc.2
 
-# 1.0.0
+# Stable preparation: merge the version change, then tag that exact main commit.
 git switch -c chore/prepare-1.0.0
 dotnet nbgv set-version 1.0.0
 git add version.json
@@ -175,10 +180,11 @@ git switch main
 git merge --squash chore/prepare-1.0.0
 git commit -m "chore: prepare 1.0.0"
 git branch -d chore/prepare-1.0.0
-# Version produced on main: 1.0.0
+# Version produced on main: 1.0.0.g<commit> (validation only)
+# Verify the offset properties were removed, then create the public tag here.
 dotnet nbgv tag
 git push origin v1.0.0
-# Tag created and pushed: v1.0.0
+# Tag created and pushed: v1.0.0; CI calculates clean 1.0.0 and publishes production
 # Helper equivalent: run this on the release-preparation branch instead of the
 # NBGV set-version command above.
 # ./release-version.sh prepare-stable 1.0.0
